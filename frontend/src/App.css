@@ -133,4 +133,12 @@
   .hero-arrow{display:none}
 }
 
+.lead-actions{display:flex;align-items:center;gap:8px}
+.lead-visit-btn{border:1px solid #d9d4c6;border-radius:8px;padding:8px;background:#fff;color:#14201a;transition:background .2s}
+.lead-visit-btn:hover{background:#f4efe2}
+.row-muted{color:#9a9994;font-size:13px;text-align:center}
+.reserve-summary{padding:10px 14px;border:1px solid #e6e2d8;border-radius:10px;background:#fbf9f3;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.reserve-summary strong{font-family:"Cormorant Garamond",Georgia,serif;font-size:20px;color:#14201a}
+.reserve-summary span{color:#5b5b56;font-size:13px}
+
 @media(max-width:800px){.public-nav{display:none}.public-nav.open{display:flex;position:absolute;top:78px;left:20px;right:20px;background:var(--forest);padding:22px;flex-direction:column;align-items:flex-start;gap:18px}.mobile-menu{display:block}.hero{min-height:690px;height:86vh;padding-bottom:65px}.hero-note{display:none}.section{padding-top:75px;padding-bottom:75px}.intro-grid,.detail-grid,.form-page,.about-band{grid-template-columns:1fr;gap:38px}.project-grid{grid-template-columns:1fr}.project-card{min-height:370px}.section-heading,.visit-banner{align-items:flex-start;gap:25px;flex-direction:column}.site-footer{grid-template-columns:1fr;gap:25px}.footer-copy{margin-top:20px}.page-intro{padding-top:145px}.gallery-grid{grid-template-columns:1fr 1fr;grid-template-rows:220px 220px}.gallery-grid img:first-child{grid-row:auto}.gallery-grid img:last-child{grid-column:span 2}.property-row{grid-template-columns:1.4fr 1fr;gap:10px}.row-link{grid-column:2}.portal-login{grid-template-columns:1fr}.login-visual{min-height:310px}.login-form{padding:60px 0;width:min(390px,86%)}.portal-shell{grid-template-columns:1fr}.portal-sidebar{min-height:auto;padding:20px;position:relative}.portal-role{margin:25px 12px 12px}.portal-nav{flex-direction:row;overflow:auto}.sidebar-user{display:none}.portal-main{padding:32px 20px}.portal-date{display:none}.metric-grid{grid-template-columns:1fr 1fr}.portal-top h1{margin-bottom:30px}.lead-row{grid-template-columns:30px 1fr;gap:10px}.lead-row .status,.lead-row select{grid-column:2}.detail-hero{height:500px}.success-state h1{font-size:43px}}

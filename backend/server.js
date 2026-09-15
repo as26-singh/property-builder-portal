@@ -200,6 +200,48 @@ api.post("/admin/associates", requireAdmin, asyncH(async (req, res) => {
   res.json(toPublic(user));
 }));
 
+api.delete("/admin/associates/:id", requireAdmin, asyncH(async (req, res) => {
+  const user = await User.findOne({ id: req.params.id, role: "associate" });
+  if (!user) return res.status(404).json({ detail: "Associate not found" });
+  await User.deleteOne({ id: user.id });
+  await Lead.updateMany({ assigned_associate_id: user.id }, { $set: { assigned_associate_id: null } });
+  res.json({ message: "Associate removed" });
+}));
+
+// ---------- Admin: properties CRUD ----------
+api.get("/admin/properties", requireAdmin, asyncH(async (req, res) => {
+  const filter = req.query.project_id ? { project_id: req.query.project_id } : {};
+  const docs = await Property.find(filter).sort({ created_at: 1 }).limit(500);
+  res.json(listPublic(docs));
+}));
+
+api.post("/admin/properties", requireAdmin, asyncH(async (req, res) => {
+  const { project_id, number, size, price, status = "available", facing = "East" } = req.body || {};
+  if (!project_id || !number) return res.status(400).json({ detail: "project_id and number are required" });
+  if (!(await Project.findOne({ id: project_id }))) return res.status(404).json({ detail: "Project not found" });
+  const doc = await Property.create({
+    id: randomUUID(), project_id, number: String(number), size: size || "",
+    price: Number(price) || 0, status, facing,
+  });
+  res.json(toPublic(doc));
+}));
+
+api.patch("/admin/properties/:id", requireAdmin, asyncH(async (req, res) => {
+  const body = { ...(req.body || {}) };
+  delete body._id;
+  if (body.price !== undefined) body.price = Number(body.price) || 0;
+  const r = await Property.updateOne({ id: req.params.id }, { $set: body });
+  if (r.matchedCount === 0) return res.status(404).json({ detail: "Property not found" });
+  const doc = await Property.findOne({ id: req.params.id });
+  res.json(toPublic(doc));
+}));
+
+api.delete("/admin/properties/:id", requireAdmin, asyncH(async (req, res) => {
+  const r = await Property.deleteOne({ id: req.params.id });
+  if (r.deletedCount === 0) return res.status(404).json({ detail: "Property not found" });
+  res.json({ message: "Property deleted" });
+}));
+
 // ---------- Admin: uploads ----------
 api.post("/admin/uploads", requireAdmin, upload.single("file"), asyncH(async (req, res) => {
   if (!req.file) return res.status(400).json({ detail: "No file uploaded" });
@@ -401,6 +443,19 @@ api.get("/associate/site-visits", requireAssociate, asyncH(async (req, res) => {
   res.json(listPublic(docs));
 }));
 
+api.post("/associate/site-visits", requireAssociate, asyncH(async (req, res) => {
+  const { lead_id, project_id, visit_date, preferred_time = "Morning", notes = "" } = req.body || {};
+  if (!lead_id || !visit_date) return res.status(400).json({ detail: "lead_id and visit_date are required" });
+  const lead = await Lead.findOne({ id: lead_id, assigned_associate_id: req.user.id });
+  if (!lead) return res.status(404).json({ detail: "Assigned lead not found" });
+  const visit = await SiteVisit.create({
+    id: randomUUID(), lead_id, associate_id: req.user.id, project_id: project_id || lead.project_id,
+    visit_date, preferred_time, notes, status: "scheduled",
+  });
+  await Lead.updateOne({ id: lead_id }, { $set: { status: "visit_scheduled" } });
+  res.json(toPublic(visit));
+}));
+
 api.get("/associate/reservations", requireAssociate, asyncH(async (req, res) => {
   const docs = await Reservation.find({ associate_id: req.user.id }).sort({ created_at: -1 }).limit(200);
   res.json(listPublic(docs));
@@ -416,12 +471,16 @@ api.get("/associate/properties", requireAssociate, asyncH(async (_req, res) => {
   res.json(listPublic(docs));
 }));
 
-api.post("/associate/reservations", requireAssociate, express.urlencoded({ extended: true }), asyncH(async (req, res) => {
+api.post("/associate/reservations", requireAssociate, asyncH(async (req, res) => {
   const { property_id, lead_id } = req.body || {};
+  if (!property_id || !lead_id) return res.status(400).json({ detail: "property_id and lead_id required" });
   const prop = await Property.findOne({ id: property_id, status: "available" });
   if (!prop) return res.status(409).json({ detail: "This property is no longer available" });
+  const lead = await Lead.findOne({ id: lead_id, assigned_associate_id: req.user.id });
+  if (!lead) return res.status(404).json({ detail: "Assigned lead not found" });
   await Reservation.create({ id: randomUUID(), property_id, lead_id, associate_id: req.user.id, status: "pending" });
   await Property.updateOne({ id: property_id }, { $set: { status: "reserved" } });
+  await Lead.updateOne({ id: lead_id }, { $set: { status: "reserved" } });
   res.json({ message: "Reservation submitted for approval" });
 }));
 

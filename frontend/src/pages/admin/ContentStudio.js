@@ -77,6 +77,8 @@ const TABS = [
   { key: "general", label: "General" },
   { key: "hero-slides", label: "Hero slides" },
   { key: "projects", label: "Projects" },
+  { key: "properties", label: "Properties" },
+  { key: "associates", label: "Associates" },
   { key: "gallery", label: "Gallery" },
   { key: "testimonials", label: "Testimonials" },
   { key: "trust-pillars", label: "Trust pillars" },
@@ -349,6 +351,184 @@ function ProjectsPanel({ onSaved }) {
   );
 }
 
+function PropertiesPanel() {
+  const [projects, setProjects] = useState([]);
+  const [projectId, setProjectId] = useState("");
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.get("/admin/projects").then((r) => {
+      setProjects(r.data);
+      if (r.data.length && !projectId) setProjectId(r.data[0].id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const load = () => {
+    if (!projectId) return;
+    api.get(`/admin/properties?project_id=${projectId}`).then((r) => setItems(r.data));
+  };
+  useEffect(() => { load(); setEditing(null); setDraft({}); /* eslint-disable-next-line */ }, [projectId]);
+
+  const startNew = () => {
+    setDraft({ number: "", size: "", price: 0, status: "available", facing: "East" });
+    setEditing("new");
+    setError("");
+  };
+  const startEdit = (p) => { setDraft({ ...p }); setEditing(p.id); setError(""); };
+  const cancel = () => { setEditing(null); setDraft({}); setError(""); };
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const payload = { ...draft, project_id: projectId, price: Number(draft.price || 0) };
+      if (editing === "new") await api.post("/admin/properties", payload);
+      else await api.patch(`/admin/properties/${editing}`, payload);
+      load();
+      cancel();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Save failed");
+    } finally { setBusy(false); }
+  };
+  const remove = async (id) => {
+    if (!window.confirm("Delete this property?")) return;
+    await api.delete(`/admin/properties/${id}`);
+    load();
+  };
+
+  return (
+    <div className="content-panel">
+      <div className="content-list-head">
+        <label className="content-field" style={{ minWidth: 260 }}>
+          <span>Project</span>
+          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} data-testid="properties-project-select">
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+        <button className="button button-secondary" onClick={startNew} disabled={!projectId} data-testid="properties-new">
+          <Plus size={16} /> New property
+        </button>
+      </div>
+      <div className="content-list">
+        {items.map((p) => (
+          <div className="content-item" key={p.id} data-testid={`property-admin-${p.id}`}>
+            <div className="content-item-summary">
+              <strong>{p.number}</strong>
+              <span>{p.size} · ₹{(p.price / 100000).toFixed(1)}L · {p.facing} · {p.status}</span>
+            </div>
+            <div className="row-actions">
+              <button className="button button-secondary" onClick={() => startEdit(p)} data-testid={`property-edit-${p.id}`}>Edit</button>
+              <button className="icon-button" onClick={() => remove(p.id)} aria-label="Delete" data-testid={`property-delete-${p.id}`}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {!items.length && projectId && <div className="empty-state">No properties in this project yet.</div>}
+      </div>
+      {editing && (
+        <form className="content-edit" onSubmit={save} data-testid="property-edit-form">
+          <div className="content-edit-head">
+            <h3>{editing === "new" ? "New property" : "Edit property"}</h3>
+            <button type="button" className="icon-button" onClick={cancel}><X size={18} /></button>
+          </div>
+          <div className="content-grid">
+            <Field field={{ key: "number", label: "Plot / Unit number", required: true }} value={draft.number} onChange={(v) => setDraft({ ...draft, number: v })} />
+            <Field field={{ key: "size", label: "Size", placeholder: "1200 sq.ft" }} value={draft.size} onChange={(v) => setDraft({ ...draft, size: v })} />
+            <Field field={{ key: "price", label: "Price (₹)", type: "number" }} value={draft.price} onChange={(v) => setDraft({ ...draft, price: v })} />
+            <Field field={{ key: "facing", label: "Facing", placeholder: "East / North / West" }} value={draft.facing} onChange={(v) => setDraft({ ...draft, facing: v })} />
+            <Field field={{ key: "status", label: "Status", placeholder: "available / reserved / booked / sold" }} value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} />
+          </div>
+          {error && <div className="form-error">{error}</div>}
+          <div className="content-actions">
+            <button type="submit" className="button" disabled={busy} data-testid="property-save"><Save size={16} /> {busy ? "Saving…" : "Save"}</button>
+            <button type="button" className="button button-secondary" onClick={cancel}>Cancel</button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function AssociatesPanel() {
+  const [items, setItems] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ name: "", email: "", password: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = () => api.get("/admin/associates").then((r) => setItems(r.data));
+  useEffect(() => { load(); }, []);
+
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api.post("/admin/associates", draft);
+      setDraft({ name: "", email: "", password: "" });
+      setAdding(false);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to create associate");
+    } finally { setBusy(false); }
+  };
+  const remove = async (id) => {
+    if (!window.confirm("Remove this associate? Their assigned leads will become unassigned.")) return;
+    await api.delete(`/admin/associates/${id}`);
+    load();
+  };
+
+  return (
+    <div className="content-panel">
+      <div className="content-list-head">
+        <span className="section-kicker">{items.length} associates</span>
+        <button className="button button-secondary" onClick={() => setAdding((v) => !v)} data-testid="associates-new">
+          <Plus size={16} /> {adding ? "Cancel" : "New associate"}
+        </button>
+      </div>
+      {adding && (
+        <form className="content-edit" onSubmit={save} data-testid="associate-edit-form">
+          <div className="content-edit-head">
+            <h3>New associate</h3>
+            <button type="button" className="icon-button" onClick={() => setAdding(false)}><X size={18} /></button>
+          </div>
+          <div className="content-grid">
+            <Field field={{ key: "name", label: "Full name", required: true }} value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
+            <Field field={{ key: "email", label: "Email", required: true }} value={draft.email} onChange={(v) => setDraft({ ...draft, email: v })} />
+            <Field field={{ key: "password", label: "Initial password (min 8 chars)", required: true }} value={draft.password} onChange={(v) => setDraft({ ...draft, password: v })} />
+          </div>
+          {error && <div className="form-error" data-testid="associate-error">{error}</div>}
+          <div className="content-actions">
+            <button type="submit" className="button" disabled={busy} data-testid="associate-save"><Save size={16} /> {busy ? "Saving…" : "Create associate"}</button>
+          </div>
+        </form>
+      )}
+      <div className="content-list">
+        {items.map((a) => (
+          <div className="content-item" key={a.id} data-testid={`associate-admin-${a.id}`}>
+            <div className="content-item-summary">
+              <strong>{a.name}</strong>
+              <span>{a.email}</span>
+            </div>
+            <div className="row-actions">
+              <button className="icon-button" onClick={() => remove(a.id)} aria-label="Remove" data-testid={`associate-delete-${a.id}`}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {!items.length && <div className="empty-state">No associates yet.</div>}
+      </div>
+    </div>
+  );
+}
+
 function GalleryPanel() {
   const [items, setItems] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -437,6 +617,8 @@ export default function ContentStudio() {
         </div>
         {tab === "general" && <SettingsPanel onSaved={onSaved} />}
         {tab === "projects" && <ProjectsPanel onSaved={onSaved} />}
+        {tab === "properties" && <PropertiesPanel />}
+        {tab === "associates" && <AssociatesPanel />}
         {tab === "gallery" && <GalleryPanel />}
         {COLLECTIONS[tab] && <CollectionPanel collectionKey={tab} onSaved={onSaved} />}
       </div>
