@@ -106,6 +106,12 @@ DEFAULT_SETTINGS = {
     "phone_band_title": "Talk to a Nirnay advisor",
     "phone_band_copy": "Call for personal guidance, project walkthroughs or availability updates.",
     "footer_copy": "Places with room to become your own.",
+    "office_hours": "Monday|10:00 am – 6:00 pm\nTuesday|Closed\nWednesday|10:00 am – 6:00 pm\nThursday|10:00 am – 6:00 pm\nFriday|10:00 am – 6:00 pm\nSaturday|10:00 am – 6:00 pm\nSunday|By appointment",
+    "about_links": "About Company|/about\nLegal Documents|/about",
+    "quick_links": "Terms of Use|/about\nPrivacy Policy|/about\nContact Support|/contact\nCareers|/contact",
+    "terms_url": "/about",
+    "privacy_url": "/about",
+    "copyright_text": "© 2026 Nirnay Group. All rights reserved.",
     "instagram": "",
     "facebook": "",
     "linkedin": "",
@@ -313,7 +319,7 @@ async def admin_upload(file: UploadFile = File(...), category: str = Form("docum
     except requests.RequestException as exc:
         logger.error("Object storage upload failed: %s", exc)
         raise HTTPException(502, "Upload service is temporarily unavailable")
-    record = {"id": str(uuid.uuid4()), "storage_path": result["path"], "original_filename": file.filename, "content_type": file.content_type, "size": result.get("size", len(data)), "category": category, "project_id": project_id, "is_deleted": False, "created_at": now_iso()}
+    record = {"id": str(uuid.uuid4()), "storage_path": result["path"], "url": f"/api/media/{result['path']}", "original_filename": file.filename, "content_type": file.content_type, "size": result.get("size", len(data)), "category": category, "project_id": project_id, "is_deleted": False, "created_at": now_iso()}
     collection = "gallery" if category == "gallery" else "documents"
     await db[collection].insert_one(record)
     return public_doc(record)
@@ -455,6 +461,12 @@ class SettingsInput(BaseModel):
     phone_band_title: Optional[str] = None
     phone_band_copy: Optional[str] = None
     footer_copy: Optional[str] = None
+    office_hours: Optional[str] = None
+    about_links: Optional[str] = None
+    quick_links: Optional[str] = None
+    terms_url: Optional[str] = None
+    privacy_url: Optional[str] = None
+    copyright_text: Optional[str] = None
     instagram: Optional[str] = None
     facebook: Optional[str] = None
     linkedin: Optional[str] = None
@@ -551,6 +563,78 @@ async def content_delete(collection: str, item_id: str, user=Depends(admin_user)
     result = await db[coll].delete_one({"id": item_id})
     if result.deleted_count == 0:
         raise HTTPException(404, "Item not found")
+    return {"message": "Deleted"}
+
+
+# ---------- Media proxy, project & gallery admin CRUD ----------
+
+def get_object(path: str):
+    r = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": init_storage()}, timeout=30)
+    r.raise_for_status()
+    return r.content, r.headers.get("content-type", "application/octet-stream")
+
+@api_router.get("/media/{path:path}")
+async def serve_media(path: str):
+    if not path.startswith(f"{APP_NAME}/"):
+        raise HTTPException(404, "Not found")
+    try:
+        content, content_type = get_object(path)
+    except requests.RequestException:
+        raise HTTPException(404, "File not found")
+    return Response(content=content, media_type=content_type, headers={"Cache-Control": "public, max-age=86400"})
+
+class ProjectInput(BaseModel):
+    slug: str = Field(min_length=2, max_length=80)
+    name: str = Field(min_length=2, max_length=120)
+    location: Optional[str] = ""
+    tagline: Optional[str] = ""
+    description: Optional[str] = ""
+    price_from: Optional[int] = 0
+    area: Optional[str] = ""
+    status: Optional[str] = "selling"
+    image: Optional[str] = ""
+    master_plan_url: Optional[str] = ""
+    brochure_url: Optional[str] = ""
+
+@api_router.get("/admin/projects")
+async def admin_projects(user=Depends(admin_user)):
+    return [public_doc(x) for x in await db.projects.find({}, {"_id": 0}).sort("created_at", 1).to_list(200)]
+
+@api_router.post("/admin/projects")
+async def admin_project_create(input: ProjectInput, user=Depends(admin_user)):
+    slug = input.slug.strip().lower()
+    if await db.projects.find_one({"slug": slug}):
+        raise HTTPException(409, "A project with this slug already exists")
+    doc = {"id": str(uuid.uuid4()), "created_at": now_iso(), **input.model_dump()}
+    doc["slug"] = slug
+    await db.projects.insert_one(doc)
+    return public_doc(doc)
+
+@api_router.patch("/admin/projects/{project_id}")
+async def admin_project_update(project_id: str, input: ProjectInput, user=Depends(admin_user)):
+    slug = input.slug.strip().lower()
+    conflict = await db.projects.find_one({"slug": slug, "id": {"$ne": project_id}})
+    if conflict:
+        raise HTTPException(409, "Another project already uses this slug")
+    update = {**input.model_dump(), "slug": slug, "updated_at": now_iso()}
+    result = await db.projects.update_one({"id": project_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(404, "Project not found")
+    return public_doc(await db.projects.find_one({"id": project_id}, {"_id": 0}))
+
+@api_router.delete("/admin/projects/{project_id}")
+async def admin_project_delete(project_id: str, user=Depends(admin_user)):
+    result = await db.projects.delete_one({"id": project_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Project not found")
+    await db.properties.delete_many({"project_id": project_id})
+    return {"message": "Project and its properties deleted"}
+
+@api_router.delete("/admin/gallery/{item_id}")
+async def admin_gallery_delete(item_id: str, user=Depends(admin_user)):
+    result = await db.gallery.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Image not found")
     return {"message": "Deleted"}
 
 

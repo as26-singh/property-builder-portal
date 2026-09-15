@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Download, FileText } from "lucide-react";
 import { api } from "../api";
 import PublicLayout from "../components/PublicLayout";
 import Button from "../components/Button";
@@ -33,8 +33,26 @@ export default function ProjectDetail() {
             <div><strong>{project.area}</strong><span>of considered land</span></div>
             <div><strong>From ₹{(project.price_from / 100000).toFixed(1)}L</strong><span>starting investment</span></div>
           </div>
+          {project.brochure_url && (
+            <a href={project.brochure_url} target="_blank" rel="noreferrer" className="button" data-testid="detail-brochure">
+              <FileText size={16} /> Download brochure <Download size={14} />
+            </a>
+          )}
         </div>
       </section>
+      {project.master_plan_url && (
+        <section className="section master-plan-section" data-testid="master-plan-section">
+          <div className="section-heading">
+            <div>
+              <div className="section-kicker">The master plan</div>
+              <h2>Every plot, <em>considered.</em></h2>
+            </div>
+          </div>
+          <a href={project.master_plan_url} target="_blank" rel="noreferrer" className="master-plan-frame">
+            <img src={project.master_plan_url} alt={`${project.name} master plan`} />
+          </a>
+        </section>
+      )}
       <section className="section properties-section">
         <div className="section-heading">
           <div>
@@ -44,7 +62,7 @@ export default function ProjectDetail() {
           <Button to="/book-site-visit" testid="detail-book-visit">Book a visit</Button>
         </div>
         <div className="property-table">
-          {project.properties.map((p) => (
+          {(project.properties || []).map((p) => (
             <div className="property-row" key={p.id} data-testid={`property-row-${p.number}`}>
               <div>
                 <strong>{p.number}</strong>
@@ -55,6 +73,7 @@ export default function ProjectDetail() {
               <Link to="/contact" className="row-link">Enquire <ArrowRight size={15} /></Link>
             </div>
           ))}
+          {!(project.properties || []).length && <div className="empty-state">Availability coming soon.</div>}
         </div>
       </section>
     </PublicLayout>

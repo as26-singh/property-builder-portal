@@ -88,9 +88,13 @@
 .modal-success p{color:#5b5b56;margin-bottom:20px}
 
 /* ===== Brand tagline ===== */
-.nirnay-brand .brand-text{display:flex;flex-direction:column;gap:2px}
-.nirnay-brand .brand-tagline{font-size:11px;letter-spacing:.04em;color:#c8b98a;font-weight:400;font-family:"Noto Serif Devanagari","Cormorant Garamond",serif}
-.nirnay-brand-light .brand-tagline{color:rgba(232,195,122,.85)}
+.nirnay-brand{display:inline-flex;align-items:center;gap:12px}
+.nirnay-brand img{width:38px;height:38px;object-fit:contain;border-radius:9px;background:#fff;padding:3px;flex-shrink:0}
+.nirnay-brand-light img{background:rgba(255,255,255,.95)}
+.nirnay-brand .brand-text{display:flex;flex-direction:column;gap:2px;line-height:1}
+.nirnay-brand .brand-name{font-size:17px;font-weight:600;letter-spacing:-.02em;white-space:nowrap}
+.nirnay-brand .brand-tagline{font-size:10px;letter-spacing:.02em;color:#c8b98a;font-weight:400;font-family:"Noto Serif Devanagari","Cormorant Garamond",serif;line-height:1.15;white-space:nowrap}
+.nirnay-brand-light .brand-tagline{color:rgba(232,195,122,.9)}
 .nav-phone{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.75);font-size:13px;text-decoration:none;margin-right:8px}
 .nav-phone:hover{color:#e8c37a}
 .footer-address{color:#8a8a85;font-size:13px;margin-top:6px}
