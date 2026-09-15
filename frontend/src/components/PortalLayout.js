@@ -1,5 +1,5 @@
 import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
-import { CalendarDays, ClipboardList, Home, LogOut, MapPin, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, Home, LogOut, MapPin, Settings, Users } from "lucide-react";
 import Brand from "./Brand";
 import { useAuth } from "../auth";
 
@@ -17,6 +17,7 @@ export default function PortalLayout({ children, title }) {
         ["Dashboard", "/admin/dashboard", Home],
         ["Leads", "/admin/leads", Users],
         ["Reservations", "/admin/reservations", ClipboardList],
+        ["Content Studio", "/admin/content", Settings],
       ]
     : [
         ["Dashboard", "/associate/dashboard", Home],

@@ -159,6 +159,64 @@ SAMPLE_LEADS = [
 ]
 
 
+async def upsert_singleton(db, *, collection: str, doc: dict, id_key: str = "id") -> None:
+    if await db[collection].find_one({id_key: doc[id_key]}):
+        return
+    await db[collection].insert_one({"created_at": now_iso(), **doc})
+    print(f"  + {collection}  {doc[id_key]}")
+
+
+async def upsert_content_many(db, *, collection: str, docs: list, key: str) -> None:
+    for doc in docs:
+        if await db[collection].find_one({key: doc[key]}):
+            continue
+        await db[collection].insert_one({"id": str(uuid.uuid4()), "created_at": now_iso(), **doc})
+        print(f"    + {collection}  {doc[key]}")
+
+
+DEFAULT_SETTINGS = {
+    "id": "site-settings",
+    "phone": "+91 98765 43210",
+    "email": "hello@nirnaygroup.com",
+    "address": "Kanpur, Uttar Pradesh, India",
+    "tagline_en": "Places that feel like yours",
+    "tagline_hi": "हमारा प्रयास, बेहतर आवास",
+    "intro_title": "Not just a plot. A place to belong.",
+    "intro_copy": "We create considered spaces that give you more than an address — a setting for your next chapter, with nature, community and everyday ease built in.",
+    "phone_band_title": "Talk to a Nirnay advisor",
+    "phone_band_copy": "Call for personal guidance, project walkthroughs or availability updates.",
+    "footer_copy": "Places with room to become your own.",
+    "instagram": "",
+    "facebook": "",
+    "linkedin": "",
+}
+
+DEFAULT_HERO_SLIDES = [
+    {"image": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=85", "kicker": "Places that feel like yours", "title": "Make room for what matters.", "subtitle": "Thoughtfully planned homes and plots for people who want a little more life around them.", "cta_label": "Explore projects", "cta_link": "/projects", "order": 0},
+    {"image": "https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=1600&q=85", "kicker": "Neighbourhoods, considered", "title": "Land, patiently curated.", "subtitle": "Ready plots in green pockets, road-connected and community-designed for the long haul.", "cta_label": "See our projects", "cta_link": "/projects", "order": 1},
+    {"image": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1600&q=85", "kicker": "Rise above the everyday", "title": "Homes with a view.", "subtitle": "Premium apartments with wellness amenities, quiet corners and open skies.", "cta_label": "Book a private visit", "cta_link": "/book-site-visit", "order": 2},
+]
+
+DEFAULT_TESTIMONIALS = [
+    {"quote": "Nirnay didn't just sell us a plot — they gave us a plan. Two years in, our home fits our life better than we imagined.", "name": "Priya Sharma", "role": "Homeowner, Verdant Meadows", "order": 0},
+    {"quote": "Straightforward pricing, honest advice, and every promise kept. That is rare in Kanpur real estate.", "name": "Rohan Mehta", "role": "Investor, Nirnay Heights", "order": 1},
+    {"quote": "Their team walked us through everything, right down to loan paperwork. It felt like family, not a sales pitch.", "name": "Ananya Kapoor", "role": "First-time buyer", "order": 2},
+]
+
+DEFAULT_TRUST_PILLARS = [
+    {"icon": "MapPin", "title": "Curated locations", "description": "Every project sits on land we picked for its long-term value — connectivity, green cover and community.", "order": 0},
+    {"icon": "ShieldCheck", "title": "Transparent pricing", "description": "No hidden fees, no last-minute surprises. What you're quoted is what you sign.", "order": 1},
+    {"icon": "Users", "title": "End-to-end guidance", "description": "From your first visit to key handover — one team, one point of contact.", "order": 2},
+]
+
+DEFAULT_PROPERTY_TYPES = [
+    {"icon": "MapPin", "name": "Residential plots", "description": "Ready-to-build plots in gated communities.", "order": 0},
+    {"icon": "Home", "name": "Apartments", "description": "Premium homes with wellness amenities.", "order": 1},
+    {"icon": "TreePine", "name": "Farm plots", "description": "Weekend homes and orchards close to nature.", "order": 2},
+    {"icon": "Building2", "name": "Commercial", "description": "Shops, offices and retail plots.", "order": 3},
+]
+
+
 async def main() -> None:
     mongo_url = os.environ.get("MONGO_URL")
     db_name = os.environ.get("DB_NAME")
@@ -211,13 +269,20 @@ async def main() -> None:
             },
         )
 
+    # Site content (settings singleton + editable collections)
+    print("Site content:")
+    await upsert_singleton(db, collection="settings", doc=DEFAULT_SETTINGS)
+    await upsert_content_many(db, collection="heroSlides", docs=DEFAULT_HERO_SLIDES, key="title")
+    await upsert_content_many(db, collection="testimonials", docs=DEFAULT_TESTIMONIALS, key="name")
+    await upsert_content_many(db, collection="trustPillars", docs=DEFAULT_TRUST_PILLARS, key="title")
+    await upsert_content_many(db, collection="propertyTypes", docs=DEFAULT_PROPERTY_TYPES, key="name")
+
     print("Done.")
     print("Admin login   ->", admin_email, "/", admin_password)
     print("Associate #1 ->", "associate@verdant.example", "/", "Associate@12345")
     print("Associate #2 ->", "associate2@verdant.example", "/", "Associate@12345")
 
     client.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

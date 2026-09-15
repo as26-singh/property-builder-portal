@@ -1,53 +1,47 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import PublicLayout from "../components/PublicLayout";
 import Button from "../components/Button";
 import FeaturedProjects from "../components/FeaturedProjects";
+import HeroCarousel from "../components/HeroCarousel";
+import TrustStrip from "../components/TrustStrip";
+import TestimonialsBand from "../components/TestimonialsBand";
+import PhoneBand from "../components/PhoneBand";
+import PropertyTypesBand from "../components/PropertyTypesBand";
+import { useSiteContent } from "../content";
 
 export default function HomePage() {
+  const { content } = useSiteContent();
+  const settings = content?.settings || {};
+  const slides = content?.heroSlides || [];
+  const trust = content?.trustPillars || [];
+  const testimonials = content?.testimonials || [];
+  const types = content?.propertyTypes || [];
+
   return (
     <PublicLayout>
       <main>
-        <section className="hero">
-          <div className="hero-image"></div>
-          <div className="hero-overlay"></div>
-          <div className="hero-content">
-            <div className="eyebrow light"><Sparkles size={14} /> Places that feel like yours</div>
-            <h1>Make room for<br /><em>what matters.</em></h1>
-            <p>Thoughtfully planned homes and plots for people who want a little more life around them.</p>
-            <div className="hero-actions">
-              <Button to="/projects" testid="hero-explore-projects">Explore projects</Button>
-              <Link to="/book-site-visit" className="text-link light-link" data-testid="hero-book-visit">
-                Book a private visit <ArrowRight size={17} />
-              </Link>
-            </div>
-          </div>
-          <div className="hero-note">
-            <span>01</span>
-            <span>Homes & land, considered differently</span>
-          </div>
-        </section>
+        <HeroCarousel slides={slides} />
+
         <section className="section intro-section">
           <div className="section-kicker">A better starting point</div>
           <div className="intro-grid">
-            <h2>Not just a plot.<br /><em>A place to belong.</em></h2>
+            <h2 dangerouslySetInnerHTML={{ __html: (settings.intro_title || "Not just a plot. A place to belong.").replace(". ", ".<br/><em>").replace(/([^.]+)$/, "$1</em>") }} />
             <div>
-              <p className="large-copy">
-                We create considered spaces that give you more than an address — a setting for your next chapter,
-                with nature, community and everyday ease built in.
-              </p>
+              <p className="large-copy">{settings.intro_copy}</p>
               <Link to="/about" className="text-link" data-testid="home-story-link">
                 Discover our approach <ArrowRight size={17} />
               </Link>
             </div>
           </div>
         </section>
+
+        <TrustStrip pillars={trust} />
         <FeaturedProjects />
-        <section className="quote-band">
-          <div className="quote-mark">“</div>
-          <blockquote>There is a quiet confidence in a place designed to last.</blockquote>
-          <p>— The Nirnay principle</p>
-        </section>
+        <PropertyTypesBand types={types} />
+        <TestimonialsBand items={testimonials} />
+        <PhoneBand phone={settings.phone} title={settings.phone_band_title} copy={settings.phone_band_copy} />
+
         <section className="section visit-banner">
           <div>
             <div className="section-kicker">Come see for yourself</div>

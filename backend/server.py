@@ -94,6 +94,61 @@ async def associate_user(user=Depends(current_user)):
         raise HTTPException(403, "Associate access required")
     return user
 
+DEFAULT_SETTINGS = {
+    "id": "site-settings",
+    "phone": "+91 98765 43210",
+    "email": "hello@nirnaygroup.com",
+    "address": "Kanpur, Uttar Pradesh, India",
+    "tagline_en": "Places that feel like yours",
+    "tagline_hi": "हमारा प्रयास, बेहतर आवास",
+    "intro_title": "Not just a plot. A place to belong.",
+    "intro_copy": "We create considered spaces that give you more than an address — a setting for your next chapter, with nature, community and everyday ease built in.",
+    "phone_band_title": "Talk to a Nirnay advisor",
+    "phone_band_copy": "Call for personal guidance, project walkthroughs or availability updates.",
+    "footer_copy": "Places with room to become your own.",
+    "instagram": "",
+    "facebook": "",
+    "linkedin": "",
+}
+
+DEFAULT_HERO_SLIDES = [
+    {"image": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=85", "kicker": "Places that feel like yours", "title": "Make room for what matters.", "subtitle": "Thoughtfully planned homes and plots for people who want a little more life around them.", "cta_label": "Explore projects", "cta_link": "/projects", "order": 0},
+    {"image": "https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=1600&q=85", "kicker": "Neighbourhoods, considered", "title": "Land, patiently curated.", "subtitle": "Ready plots in green pockets, road-connected and community-designed for the long haul.", "cta_label": "See our projects", "cta_link": "/projects", "order": 1},
+    {"image": "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1600&q=85", "kicker": "Rise above the everyday", "title": "Homes with a view.", "subtitle": "Premium apartments with wellness amenities, quiet corners and open skies.", "cta_label": "Book a private visit", "cta_link": "/book-site-visit", "order": 2},
+]
+
+DEFAULT_TESTIMONIALS = [
+    {"quote": "Nirnay didn't just sell us a plot — they gave us a plan. Two years in, our home fits our life better than we imagined.", "name": "Priya Sharma", "role": "Homeowner, Verdant Meadows", "order": 0},
+    {"quote": "Straightforward pricing, honest advice, and every promise kept. That is rare in Kanpur real estate.", "name": "Rohan Mehta", "role": "Investor, Nirnay Heights", "order": 1},
+    {"quote": "Their team walked us through everything, right down to loan paperwork. It felt like family, not a sales pitch.", "name": "Ananya Kapoor", "role": "First-time buyer", "order": 2},
+]
+
+DEFAULT_TRUST_PILLARS = [
+    {"icon": "MapPin", "title": "Curated locations", "description": "Every project sits on land we picked for its long-term value — connectivity, green cover and community.", "order": 0},
+    {"icon": "ShieldCheck", "title": "Transparent pricing", "description": "No hidden fees, no last-minute surprises. What you're quoted is what you sign.", "order": 1},
+    {"icon": "Users", "title": "End-to-end guidance", "description": "From your first visit to key handover — one team, one point of contact.", "order": 2},
+]
+
+DEFAULT_PROPERTY_TYPES = [
+    {"icon": "MapPin", "name": "Residential plots", "description": "Ready-to-build plots in gated communities.", "order": 0},
+    {"icon": "Home", "name": "Apartments", "description": "Premium homes with wellness amenities.", "order": 1},
+    {"icon": "TreePine", "name": "Farm plots", "description": "Weekend homes and orchards close to nature.", "order": 2},
+    {"icon": "Building2", "name": "Commercial", "description": "Shops, offices and retail plots.", "order": 3},
+]
+
+
+async def seed_defaults(collection: str, docs: list):
+    for doc in docs:
+        key = {"title": doc.get("title")} if "title" in doc and collection == "trustPillars" else \
+              {"name": doc.get("name")} if collection in {"testimonials", "propertyTypes"} else \
+              {"title": doc.get("title")} if collection == "heroSlides" else None
+        if key and await db[collection].find_one(key):
+            continue
+        if not key and await db[collection].count_documents({}) > 0:
+            continue
+        await db[collection].insert_one({"id": str(uuid.uuid4()), "created_at": now_iso(), **doc})
+
+
 async def seed_data():
     await db.users.create_index("email", unique=True)
     if not await db.users.find_one({"email": os.environ["ADMIN_EMAIL"].lower()}):
@@ -105,6 +160,21 @@ async def seed_data():
         await db.projects.insert_one({"id": project_id, "slug": "verdant-meadows", "name": "Verdant Meadows", "location": "Kanpur, Uttar Pradesh", "tagline": "A quieter way to come home.", "description": "Thoughtfully planned plots surrounded by green corridors, generous roads, and a community designed for long-term living.", "price_from": 1850000, "area": "18 acres", "status": "selling", "image": "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=85", "created_at": now_iso()})
         for number, size, status in [("A-101", "1200 sq.ft", "available"), ("A-102", "1500 sq.ft", "reserved"), ("B-204", "1800 sq.ft", "available"), ("C-112", "2400 sq.ft", "booked")]:
             await db.properties.insert_one({"id": str(uuid.uuid4()), "project_id": project_id, "number": number, "size": size, "price": 1850000 if size == "1200 sq.ft" else 2450000, "status": status, "facing": "East", "created_at": now_iso()})
+    # Content collections
+    if not await db.settings.find_one({"id": "site-settings"}):
+        await db.settings.insert_one({**DEFAULT_SETTINGS, "created_at": now_iso(), "updated_at": now_iso()})
+    if not await db.heroSlides.find_one({}):
+        for slide in DEFAULT_HERO_SLIDES:
+            await db.heroSlides.insert_one({"id": str(uuid.uuid4()), "created_at": now_iso(), **slide})
+    if not await db.testimonials.find_one({}):
+        for item in DEFAULT_TESTIMONIALS:
+            await db.testimonials.insert_one({"id": str(uuid.uuid4()), "created_at": now_iso(), **item})
+    if not await db.trustPillars.find_one({}):
+        for item in DEFAULT_TRUST_PILLARS:
+            await db.trustPillars.insert_one({"id": str(uuid.uuid4()), "created_at": now_iso(), **item})
+    if not await db.propertyTypes.find_one({}):
+        for item in DEFAULT_PROPERTY_TYPES:
+            await db.propertyTypes.insert_one({"id": str(uuid.uuid4()), "created_at": now_iso(), **item})
 
 @app.on_event("startup")
 async def startup():
@@ -370,6 +440,119 @@ async def get_status_checks():
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
     
     return status_checks
+
+# ---------- Content management (site-wide, super-admin editable) ----------
+
+class SettingsInput(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    tagline_en: Optional[str] = None
+    tagline_hi: Optional[str] = None
+    intro_title: Optional[str] = None
+    intro_copy: Optional[str] = None
+    phone_band_title: Optional[str] = None
+    phone_band_copy: Optional[str] = None
+    footer_copy: Optional[str] = None
+    instagram: Optional[str] = None
+    facebook: Optional[str] = None
+    linkedin: Optional[str] = None
+
+class HeroSlideInput(BaseModel):
+    image: str
+    kicker: Optional[str] = ""
+    title: str
+    subtitle: Optional[str] = ""
+    cta_label: Optional[str] = "Explore projects"
+    cta_link: Optional[str] = "/projects"
+    order: int = 0
+
+class TestimonialInput(BaseModel):
+    quote: str
+    name: str
+    role: Optional[str] = ""
+    order: int = 0
+
+class TrustPillarInput(BaseModel):
+    icon: str
+    title: str
+    description: str
+    order: int = 0
+
+class PropertyTypeInput(BaseModel):
+    icon: str
+    name: str
+    description: Optional[str] = ""
+    order: int = 0
+
+CONTENT_COLLECTIONS = {
+    "hero-slides": ("heroSlides", HeroSlideInput),
+    "testimonials": ("testimonials", TestimonialInput),
+    "trust-pillars": ("trustPillars", TrustPillarInput),
+    "property-types": ("propertyTypes", PropertyTypeInput),
+}
+
+@api_router.get("/public/site-content")
+async def public_site_content():
+    settings = await db.settings.find_one({"id": "site-settings"}, {"_id": 0}) or {}
+    return {
+        "settings": public_doc(settings) or {},
+        "heroSlides": [public_doc(x) for x in await db.heroSlides.find({}, {"_id": 0}).sort("order", 1).to_list(50)],
+        "testimonials": [public_doc(x) for x in await db.testimonials.find({}, {"_id": 0}).sort("order", 1).to_list(50)],
+        "trustPillars": [public_doc(x) for x in await db.trustPillars.find({}, {"_id": 0}).sort("order", 1).to_list(50)],
+        "propertyTypes": [public_doc(x) for x in await db.propertyTypes.find({}, {"_id": 0}).sort("order", 1).to_list(50)],
+    }
+
+@api_router.get("/admin/settings")
+async def get_settings(user=Depends(admin_user)):
+    settings = await db.settings.find_one({"id": "site-settings"}, {"_id": 0})
+    return public_doc(settings) or {}
+
+@api_router.put("/admin/settings")
+async def put_settings(input: SettingsInput, user=Depends(admin_user)):
+    update = {k: v for k, v in input.model_dump().items() if v is not None}
+    update["updated_at"] = now_iso()
+    await db.settings.update_one({"id": "site-settings"}, {"$set": update, "$setOnInsert": {"id": "site-settings", "created_at": now_iso()}}, upsert=True)
+    return await get_settings(user)
+
+def _resolve_collection(name: str):
+    if name not in CONTENT_COLLECTIONS:
+        raise HTTPException(404, "Unknown content collection")
+    return CONTENT_COLLECTIONS[name]
+
+@api_router.get("/admin/content/{collection}")
+async def content_list(collection: str, user=Depends(admin_user)):
+    coll, _ = _resolve_collection(collection)
+    return [public_doc(x) for x in await db[coll].find({}, {"_id": 0}).sort("order", 1).to_list(200)]
+
+@api_router.post("/admin/content/{collection}")
+async def content_create(collection: str, payload: dict, user=Depends(admin_user)):
+    coll, Model = _resolve_collection(collection)
+    data = Model(**payload).model_dump()
+    data.update({"id": str(uuid.uuid4()), "created_at": now_iso()})
+    await db[coll].insert_one(data)
+    return public_doc(data)
+
+@api_router.patch("/admin/content/{collection}/{item_id}")
+async def content_update(collection: str, item_id: str, payload: dict, user=Depends(admin_user)):
+    coll, Model = _resolve_collection(collection)
+    data = Model(**payload).model_dump()
+    data["updated_at"] = now_iso()
+    result = await db[coll].update_one({"id": item_id}, {"$set": data})
+    if result.matched_count == 0:
+        raise HTTPException(404, "Item not found")
+    updated = await db[coll].find_one({"id": item_id}, {"_id": 0})
+    return public_doc(updated)
+
+@api_router.delete("/admin/content/{collection}/{item_id}")
+async def content_delete(collection: str, item_id: str, user=Depends(admin_user)):
+    coll, _ = _resolve_collection(collection)
+    result = await db[coll].delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Item not found")
+    return {"message": "Deleted"}
+
 
 # Include the router in the main app
 app.include_router(api_router)
