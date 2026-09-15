@@ -1,14 +1,19 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import bcrypt
+import jwt
+import secrets
+import requests
 
 
 ROOT_DIR = Path(__file__).parent
@@ -25,6 +30,86 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+JWT_ALGORITHM = "HS256"
+APP_NAME = "verdant-estates"
+storage_key = None
+STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+def public_doc(doc):
+    if not doc:
+        return None
+    doc = {k: v for k, v in doc.items() if k != "_id" and k != "password_hash"}
+    return doc
+
+def hash_password(password):
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+def verify_password(password, hashed):
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
+def init_storage(force=False):
+    global storage_key
+    if storage_key and not force:
+        return storage_key
+    response = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": os.environ["EMERGENT_LLM_KEY"]}, timeout=30)
+    response.raise_for_status()
+    storage_key = response.json()["storage_key"]
+    return storage_key
+
+def put_object(path, data, content_type):
+    response = requests.put(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": init_storage(), "Content-Type": content_type}, data=data, timeout=120)
+    response.raise_for_status()
+    return response.json()
+
+def token(user_id, email, role):
+    return jwt.encode({"sub": user_id, "email": email, "role": role, "exp": datetime.now(timezone.utc) + timedelta(hours=8)}, os.environ["JWT_SECRET"], algorithm=JWT_ALGORITHM)
+
+async def current_user(request: Request):
+    value = request.cookies.get("access_token")
+    if not value:
+        auth = request.headers.get("Authorization", "")
+        value = auth[7:] if auth.startswith("Bearer ") else None
+    if not value:
+        raise HTTPException(401, "Authentication required")
+    try:
+        payload = jwt.decode(value, os.environ["JWT_SECRET"], algorithms=[JWT_ALGORITHM])
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        if not user:
+            raise HTTPException(401, "User not found")
+        return user
+    except (jwt.InvalidTokenError, KeyError):
+        raise HTTPException(401, "Invalid or expired session")
+
+async def admin_user(user=Depends(current_user)):
+    if user["role"] != "super_admin":
+        raise HTTPException(403, "Admin access required")
+    return user
+
+async def associate_user(user=Depends(current_user)):
+    if user["role"] != "associate":
+        raise HTTPException(403, "Associate access required")
+    return user
+
+async def seed_data():
+    await db.users.create_index("email", unique=True)
+    if not await db.users.find_one({"email": os.environ["ADMIN_EMAIL"].lower()}):
+        await db.users.insert_one({"id": str(uuid.uuid4()), "name": "Company Owner", "email": os.environ["ADMIN_EMAIL"].lower(), "password_hash": hash_password(os.environ["ADMIN_PASSWORD"]), "role": "super_admin", "created_at": now_iso()})
+    if not await db.users.find_one({"email": "associate@verdant.example"}):
+        await db.users.insert_one({"id": str(uuid.uuid4()), "name": "Amit Sharma", "email": "associate@verdant.example", "password_hash": hash_password("Associate@12345"), "role": "associate", "created_at": now_iso()})
+    if not await db.projects.find_one({"slug": "verdant-meadows"}):
+        project_id = str(uuid.uuid4())
+        await db.projects.insert_one({"id": project_id, "slug": "verdant-meadows", "name": "Verdant Meadows", "location": "Kanpur, Uttar Pradesh", "tagline": "A quieter way to come home.", "description": "Thoughtfully planned plots surrounded by green corridors, generous roads, and a community designed for long-term living.", "price_from": 1850000, "area": "18 acres", "status": "selling", "image": "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=85", "created_at": now_iso()})
+        for number, size, status in [("A-101", "1200 sq.ft", "available"), ("A-102", "1500 sq.ft", "reserved"), ("B-204", "1800 sq.ft", "available"), ("C-112", "2400 sq.ft", "booked")]:
+            await db.properties.insert_one({"id": str(uuid.uuid4()), "project_id": project_id, "number": number, "size": size, "price": 1850000 if size == "1200 sq.ft" else 2450000, "status": status, "facing": "East", "created_at": now_iso()})
+
+@app.on_event("startup")
+async def startup():
+    await seed_data()
+
 
 # Define Models
 class StatusCheck(BaseModel):
@@ -40,7 +125,227 @@ class StatusCheckCreate(BaseModel):
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Verdant Estates API", "status": "ready"}
+
+class LoginInput(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+
+class InquiryInput(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    phone: str = Field(min_length=7, max_length=20)
+    email: Optional[EmailStr] = None
+    project_id: Optional[str] = None
+    message: Optional[str] = Field(default="", max_length=1000)
+
+class VisitInput(InquiryInput):
+    preferred_date: str
+    preferred_time: str = "Morning"
+
+class LeadStatusInput(BaseModel):
+    status: str
+    note: Optional[str] = ""
+
+class AssignmentInput(BaseModel):
+    associate_id: str
+
+class DecisionInput(BaseModel):
+    decision: str
+
+class AssociateInput(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=8)
+
+@api_router.post("/auth/login")
+async def login(input: LoginInput, response: Response):
+    user = await db.users.find_one({"email": input.email.lower()})
+    if not user or not verify_password(input.password, user["password_hash"]):
+        raise HTTPException(401, "Incorrect email or password")
+    response.set_cookie("access_token", token(user["id"], user["email"], user["role"]), httponly=True, secure=True, samesite="none", max_age=28800)
+    return public_doc(user)
+
+@api_router.get("/auth/me")
+async def me(user=Depends(current_user)):
+    return user
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token")
+    return {"message": "Logged out"}
+
+@api_router.get("/public/projects")
+async def public_projects():
+    return [public_doc(x) for x in await db.projects.find({}, {"_id": 0}).to_list(100)]
+
+@api_router.get("/public/projects/{slug}")
+async def public_project(slug: str):
+    project = public_doc(await db.projects.find_one({"slug": slug}, {"_id": 0}))
+    if not project: raise HTTPException(404, "Project not found")
+    project["properties"] = [public_doc(x) for x in await db.properties.find({"project_id": project["id"]}, {"_id": 0}).to_list(100)]
+    return project
+
+@api_router.get("/public/properties")
+async def public_properties():
+    return [public_doc(x) for x in await db.properties.find({}, {"_id": 0}).to_list(500)]
+
+@api_router.post("/public/inquiries")
+async def create_inquiry(input: InquiryInput):
+    lead = {"id": str(uuid.uuid4()), "name": input.name, "phone": input.phone, "email": input.email, "project_id": input.project_id, "message": input.message, "status": "new", "assigned_associate_id": None, "source": "website", "created_at": now_iso(), "updated_at": now_iso()}
+    await db.leads.insert_one(lead)
+    await db.inquiries.insert_one({"id": str(uuid.uuid4()), "lead_id": lead["id"], "type": "inquiry", "created_at": now_iso()})
+    return {"message": "Thanks — our team will be in touch shortly.", "lead_id": lead["id"]}
+
+@api_router.post("/public/site-visits")
+async def public_visit(input: VisitInput):
+    lead_result = await create_inquiry(InquiryInput(name=input.name, phone=input.phone, email=input.email, project_id=input.project_id, message=input.message))
+    visit = {"id": str(uuid.uuid4()), "lead_id": lead_result["lead_id"], "project_id": input.project_id, "visit_date": input.preferred_date, "preferred_time": input.preferred_time, "status": "requested", "associate_id": None, "notes": "", "created_at": now_iso()}
+    await db.siteVisits.insert_one(visit)
+    return {"message": "Your site visit request is on its way.", "visit_id": visit["id"]}
+
+@api_router.get("/admin/dashboard")
+async def admin_dashboard(user=Depends(admin_user)):
+    counts = {name: await db[name].count_documents({}) for name in ["projects", "properties", "leads", "siteVisits", "reservations", "bookings", "users"]}
+    counts["available"] = await db.properties.count_documents({"status": "available"})
+    counts["associates"] = await db.users.count_documents({"role": "associate"})
+    counts["pending_leads"] = await db.leads.count_documents({"assigned_associate_id": None})
+    return counts
+
+@api_router.get("/admin/leads")
+async def admin_leads(user=Depends(admin_user)):
+    return [public_doc(x) for x in await db.leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)]
+
+@api_router.get("/admin/associates")
+async def admin_associates(user=Depends(admin_user)):
+    return [public_doc(x) for x in await db.users.find({"role": "associate"}, {"_id": 0, "password_hash": 0}).to_list(100)]
+
+@api_router.post("/admin/associates")
+async def create_associate(input: AssociateInput, user=Depends(admin_user)):
+    email = input.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(409, "A user with this email already exists")
+    record = {"id": str(uuid.uuid4()), "name": input.name, "email": email, "password_hash": hash_password(input.password), "role": "associate", "created_at": now_iso()}
+    await db.users.insert_one(record)
+    return public_doc(record)
+
+@api_router.post("/admin/uploads")
+async def admin_upload(file: UploadFile = File(...), category: str = Form("documents"), project_id: Optional[str] = Form(None), user=Depends(admin_user)):
+    allowed = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+    if file.content_type not in allowed:
+        raise HTTPException(400, "Only JPG, PNG, WEBP and PDF files are supported")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Files must be smaller than 10MB")
+    extension = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin").lower()
+    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{extension}"
+    try:
+        result = put_object(path, data, file.content_type)
+    except requests.RequestException as exc:
+        logger.error("Object storage upload failed: %s", exc)
+        raise HTTPException(502, "Upload service is temporarily unavailable")
+    record = {"id": str(uuid.uuid4()), "storage_path": result["path"], "original_filename": file.filename, "content_type": file.content_type, "size": result.get("size", len(data)), "category": category, "project_id": project_id, "is_deleted": False, "created_at": now_iso()}
+    collection = "gallery" if category == "gallery" else "documents"
+    await db[collection].insert_one(record)
+    return public_doc(record)
+
+@api_router.patch("/admin/leads/{lead_id}/assign")
+async def assign_lead(lead_id: str, input: AssignmentInput, user=Depends(admin_user)):
+    await db.leads.update_one({"id": lead_id}, {"$set": {"assigned_associate_id": input.associate_id, "updated_at": now_iso()}})
+    return {"message": "Lead assigned"}
+
+@api_router.get("/associate/dashboard")
+async def associate_dashboard(user=Depends(associate_user)):
+    query = {"assigned_associate_id": user["id"]}
+    return {"leads": await db.leads.count_documents(query), "follow_ups": await db.leads.count_documents({**query, "status": {"$in": ["new", "contacted", "interested"]}}), "visits": await db.siteVisits.count_documents({"associate_id": user["id"]}), "reservations": await db.reservations.count_documents({"associate_id": user["id"]}), "bookings": await db.bookings.count_documents({"associate_id": user["id"]})}
+
+@api_router.get("/associate/leads")
+async def associate_leads(user=Depends(associate_user)):
+    return [public_doc(x) for x in await db.leads.find({"assigned_associate_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)]
+
+@api_router.patch("/associate/leads/{lead_id}/status")
+async def update_lead(lead_id: str, input: LeadStatusInput, user=Depends(associate_user)):
+    lead = await db.leads.find_one({"id": lead_id, "assigned_associate_id": user["id"]}, {"_id": 0})
+    if not lead: raise HTTPException(404, "Assigned lead not found")
+    await db.leads.update_one({"id": lead_id}, {"$set": {"status": input.status, "updated_at": now_iso()}})
+    await db.leadActivities.insert_one({"id": str(uuid.uuid4()), "lead_id": lead_id, "associate_id": user["id"], "type": "status_change", "note": input.note, "status": input.status, "created_at": now_iso()})
+    return {"message": "Lead updated"}
+
+@api_router.get("/associate/site-visits")
+async def associate_visits(user=Depends(associate_user)):
+    return [public_doc(x) for x in await db.siteVisits.find({"associate_id": user["id"]}, {"_id": 0}).sort("visit_date", 1).to_list(200)]
+
+@api_router.get("/associate/reservations")
+async def associate_reservations(user=Depends(associate_user)):
+    return [public_doc(x) for x in await db.reservations.find({"associate_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)]
+
+@api_router.get("/associate/bookings")
+async def associate_bookings(user=Depends(associate_user)):
+    return [public_doc(x) for x in await db.bookings.find({"associate_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)]
+
+@api_router.get("/associate/properties")
+async def associate_properties(user=Depends(associate_user)):
+    return [public_doc(x) for x in await db.properties.find({}, {"_id": 0}).to_list(500)]
+
+@api_router.post("/associate/reservations")
+async def reserve_property(property_id: str = Form(...), lead_id: str = Form(...), user=Depends(associate_user)):
+    prop = await db.properties.find_one({"id": property_id, "status": "available"}, {"_id": 0})
+    if not prop: raise HTTPException(409, "This property is no longer available")
+    reservation = {"id": str(uuid.uuid4()), "property_id": property_id, "lead_id": lead_id, "associate_id": user["id"], "status": "pending", "created_at": now_iso()}
+    await db.reservations.insert_one(reservation)
+    await db.properties.update_one({"id": property_id}, {"$set": {"status": "reserved"}})
+    return {"message": "Reservation submitted for approval"}
+
+@api_router.post("/associate/bookings")
+async def request_booking(reservation_id: str = Form(...), user=Depends(associate_user)):
+    reservation = await db.reservations.find_one({"id": reservation_id, "associate_id": user["id"], "status": "approved"}, {"_id": 0})
+    if not reservation: raise HTTPException(409, "Only approved reservations can become booking requests")
+    existing = await db.bookings.find_one({"reservation_id": reservation_id})
+    if existing: return public_doc(existing)
+    booking = {"id": str(uuid.uuid4()), "reservation_id": reservation_id, "property_id": reservation["property_id"], "lead_id": reservation["lead_id"], "associate_id": user["id"], "status": "pending", "created_at": now_iso()}
+    await db.bookings.insert_one(booking)
+    return public_doc(booking)
+
+@api_router.get("/admin/reservations")
+async def admin_reservations(user=Depends(admin_user)):
+    return [public_doc(x) for x in await db.reservations.find({}, {"_id": 0}).sort("created_at", -1).to_list(300)]
+
+@api_router.patch("/admin/reservations/{reservation_id}")
+async def decide_reservation(reservation_id: str, input: DecisionInput, user=Depends(admin_user)):
+    reservation = await db.reservations.find_one({"id": reservation_id}, {"_id": 0})
+    if not reservation: raise HTTPException(404, "Reservation not found")
+    status = "approved" if input.decision == "approve" else "rejected"
+    await db.reservations.update_one({"id": reservation_id}, {"$set": {"status": status, "reviewed_at": now_iso()}})
+    if status == "rejected": await db.properties.update_one({"id": reservation["property_id"]}, {"$set": {"status": "available"}})
+    return {"message": f"Reservation {status}"}
+
+@api_router.get("/admin/bookings")
+async def admin_bookings(user=Depends(admin_user)):
+    return [public_doc(x) for x in await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(300)]
+
+@api_router.patch("/admin/bookings/{booking_id}")
+async def decide_booking(booking_id: str, input: DecisionInput, user=Depends(admin_user)):
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking: raise HTTPException(404, "Booking not found")
+    status = "approved" if input.decision == "approve" else "rejected"
+    await db.bookings.update_one({"id": booking_id}, {"$set": {"status": status, "reviewed_at": now_iso()}})
+    if status == "approved": await db.properties.update_one({"id": booking["property_id"]}, {"$set": {"status": "booked"}})
+    return {"message": f"Booking {status}"}
+
+@api_router.get("/admin/reports")
+async def admin_reports(user=Depends(admin_user)):
+    return {"lead_status": {status: await db.leads.count_documents({"status": status}) for status in ["new", "contacted", "interested", "visit_scheduled", "visited", "negotiation", "reserved", "booked", "sold"]}, "property_status": {status: await db.properties.count_documents({"status": status}) for status in ["available", "reserved", "negotiation", "booked", "sold", "blocked"]}}
+
+@api_router.get("/admin/documents")
+async def admin_documents(user=Depends(admin_user)):
+    return [public_doc(x) for x in await db.documents.find({"is_deleted": False}, {"_id": 0}).to_list(500)]
+
+@api_router.get("/admin/gallery")
+async def admin_gallery(user=Depends(admin_user)):
+    return [public_doc(x) for x in await db.gallery.find({"is_deleted": False}, {"_id": 0}).to_list(500)]
+
+@api_router.get("/public/gallery")
+async def public_gallery():
+    return [public_doc(x) for x in await db.gallery.find({"is_deleted": False}, {"_id": 0}).to_list(100)]
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -72,7 +377,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=[os.environ.get('FRONTEND_URL', 'http://localhost:3000')],
     allow_methods=["*"],
     allow_headers=["*"],
 )

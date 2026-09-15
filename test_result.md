@@ -101,3 +101,93 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Build a functional real-estate system with a premium customer website, Associate Portal, and Admin Portal. Customer flow: browse projects, submit inquiry, request site visit, associate contact, reservation, booking. Associates use custom email/password JWT login and can manage assigned leads, lead statuses, follow-ups, site visits, reservations and bookings. Admins manage projects, properties, associates, leads, site visits, reservations, bookings, documents, gallery, settings and reports. Use MongoDB collections users, projects, properties, leads, leadActivities, siteVisits, reservations, bookings, documents, inquiries, gallery, settings, notifications and activityLogs. User chose object storage for real uploads, a temporary demo admin, and the end-to-end workflow first."
+backend:
+  - task: "JWT admin login and session"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Seeded super admin, login cookie, /auth/me and logout verified with external API curl."
+  - task: "Public inquiry and site visit APIs"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Public inquiry created a lead successfully through the configured API."
+  - task: "Associate lead and reservation workflow"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Endpoints implemented; requires end-to-end authenticated verification."
+  - task: "Object storage upload endpoint"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin-only upload endpoint implemented using integration proxy and database file references."
+frontend:
+  - task: "Premium public website routes and inquiry forms"
+    implemented: true
+    working: true
+    file: "frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Homepage and admin login rendered successfully in screenshots; production build passed."
+  - task: "Associate and admin portal screens"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Dashboard, leads, properties, site visit and reservation views implemented; requires browser flow verification."
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: true
+test_plan:
+  current_focus:
+    - "Admin login and protected dashboard"
+    - "Public inquiry creates lead"
+    - "Associate login sees assigned lead and can update status"
+    - "Role isolation between admin and associate"
+    - "Responsive public website and form testids"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+agent_communication:
+  - agent: "main"
+    message: "Implemented the first functional release, seeded demo admin and associate credentials, and verified backend compile, frontend build, public API, admin login API, and screenshots."
+  - agent: "main"
+    message: "Added reservation listing/booking request and admin booking decision APIs, reports/document/gallery endpoints, and replaced Verdant branding with the attached Nirnay Group logo. Production build and logo screenshot pass; retest core flows plus new booking routes."
