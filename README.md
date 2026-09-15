@@ -1,74 +1,86 @@
-# Nirnay Group — Real Estate CRM
+# Nirnay Group — Real Estate CRM (MERN stack)
 
 A three-in-one real-estate platform:
 
-- **Public Website** — projects, properties, gallery, enquiries, site-visit bookings
-- **Associate Portal** — assigned leads, follow-ups, site visits, reservations, bookings
-- **Admin Portal** — full oversight, associate management, lead assignment, reservation & booking approvals
+- **Public Website** — projects, properties, gallery, hero carousel, enquiries, site-visit bookings
+- **Associate Portal** — assigned leads, follow-ups, site visits, reservations
+- **Admin Portal** — full oversight, associate management, lead assignment, reservation & booking approvals, live Content Studio
 
-**Stack:** React (CRA + Craco) · FastAPI · MongoDB · JWT cookies · Emergent object storage
+**Stack:**
+- **M**ongoDB (data)
+- **E**xpress (Node.js API)
+- **R**eact + CRA/Craco (SPA)
+- **N**ode.js (v20+)
+- Python is used ONLY for the one-time metadata seed script
 
 ---
 
 ## Project Layout
 
 ```
-/app
-├── backend/
-│   ├── server.py              # FastAPI app + all /api endpoints
-│   ├── scripts/
-│   │   └── seed_data.py       # Standalone metadata seed script
-│   ├── tests/                 # pytest workflow tests
-│   ├── requirements.txt
-│   └── .env                   # MONGO_URL, DB_NAME, JWT_SECRET, ADMIN_*, etc.
-├── frontend/
-│   ├── src/
-│   │   ├── App.js             # Router
-│   │   ├── api.js             # axios instance
-│   │   ├── auth.js            # AuthProvider + useAuth
-│   │   ├── components/        # Layouts + shared UI (Brand, Buttons, TableToolbar)
-│   │   └── pages/             # One page per file
+/
+├── backend/                    # Node.js / Express API
+│   ├── server.js               # Main entry point (Express app + routes)
+│   ├── db.js                   # Mongoose connection + schemas
+│   ├── auth.js                 # JWT + cookie middleware
+│   ├── seed.js                 # Startup defaults (idempotent)
+│   ├── uploads/                # Local disk storage for gallery / brochures
 │   ├── package.json
-│   └── .env                   # REACT_APP_BACKEND_URL
-└── memory/test_credentials.md
+│   ├── .env                    # MONGO_URL, DB_NAME, JWT_SECRET, ADMIN_*, FRONTEND_URL
+│   ├── requirements.txt        # Python deps for seed script only
+│   └── scripts/
+│       └── seed_data.py        # Python metadata seed (projects, associates, sample leads)
+└── frontend/                   # React app
+    ├── src/
+    │   ├── App.js              # Router
+    │   ├── api.js              # axios instance
+    │   ├── auth.js             # AuthProvider
+    │   ├── content.js          # SiteContentProvider (fetches /api/public/site-content)
+    │   ├── components/         # PublicLayout, PortalLayout, HeroCarousel, EnquireRibbon, TableToolbar, UploadField…
+    │   └── pages/              # HomePage, ProjectsPage, ProjectDetail, LeadsPage, admin/ContentStudio…
+    ├── package.json
+    └── .env                    # REACT_APP_BACKEND_URL
 ```
 
 ---
 
 ## Prerequisites
 
-- Node.js 18+ and Yarn
-- Python 3.11+
-- MongoDB running locally (default `mongodb://localhost:27017`)
+- **Node.js 18+** and **Yarn** — install yarn once with `npm install -g yarn`
+- **Python 3.11+** with `pip` (only for the seed script)
+- **MongoDB** running locally (default `mongodb://localhost:27017`)
+  - Windows: install MongoDB Community, or run in Docker: `docker run -d -p 27017:27017 mongo`
+  - macOS: `brew install mongodb-community && brew services start mongodb-community`
 
 ---
 
 ## Fresh-Clone Setup
 
 ```bash
-# 1. Backend deps
+# 1. Backend Node deps
 cd backend
-pip install -r requirements.txt
+yarn install
 
 # 2. Frontend deps
 cd ../frontend
 yarn install
+
+# 3. (Optional) Python deps for the seed script
+cd ../backend
+pip install -r requirements.txt
 ```
 
 ### Environment files
-
-Create/edit the two `.env` files:
 
 **`backend/.env`**
 ```env
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=nirnay_crm
-CORS_ORIGINS=*
-JWT_SECRET=<generate-a-64-char-random-string>
+JWT_SECRET=change-me-to-a-random-64-char-string
 ADMIN_EMAIL=admin@nirnay.example
 ADMIN_PASSWORD=Admin@12345
 FRONTEND_URL=http://localhost:3000
-EMERGENT_LLM_KEY=<optional-for-file-uploads>
+PORT=8001
 ```
 
 **`frontend/.env`**
@@ -80,98 +92,77 @@ ENABLE_HEALTH_CHECK=false
 
 ---
 
-## Populate MongoDB (metadata seed)
+## Populate MongoDB (one-time metadata seed)
 
-Run this once after cloning to fill MongoDB with the admin, two associates, three projects with properties, and sample leads.
-The script is **idempotent** — safe to re-run any time.
+The Node server always creates a minimal safety-net seed on startup (admin + 1 associate + 1 project). Run the Python script for a richer dataset (2 associates + 3 projects + 15 properties + 5 sample leads + full site content).
 
 ```bash
-cd /app
+# from the project root
 python backend/scripts/seed_data.py
 ```
 
-Expected output:
-```
-Seeding database: nirnay_crm
-Users:
-  + user  admin@nirnay.example (super_admin)
-  + user  associate@verdant.example (associate)
-  + user  associate2@verdant.example (associate)
-Projects & properties:
-  + project  verdant-meadows
-    + property  A-101
-    ...
-Sample leads:
-    + lead  Rohan Mehta (+91-90000-00001)
-    ...
-Done.
-Admin login   -> admin@nirnay.example / Admin@12345
-Associate #1 -> associate@verdant.example / Associate@12345
-Associate #2 -> associate2@verdant.example / Associate@12345
-```
-
-> The FastAPI app also runs a tiny bootstrap seed on every startup as a safety net (creates the admin + one associate + one project if missing), so the app never boots empty.
+Idempotent — safe to re-run any time.
 
 ---
 
 ## Run the app
 
-**Backend** (port 8001)
+Two terminals side-by-side:
+
+**Terminal 1 — Backend (port 8001):**
 ```bash
 cd backend
-uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+yarn start          # or: node server.js
 ```
 
-**Frontend** (port 3000)
+**Terminal 2 — Frontend (port 3000):**
 ```bash
 cd frontend
 yarn start
 ```
 
-Open http://localhost:3000
-
-- Public site: `/`
-- Admin login: `/admin/login`
-- Associate login: `/associate/login`
+Open **http://localhost:3000**.
 
 ---
 
-## Login credentials (after seeding)
+## Login credentials
 
 | Role        | Email                          | Password         |
 |-------------|--------------------------------|------------------|
-| Super admin | value of `ADMIN_EMAIL`         | `ADMIN_PASSWORD` |
+| Super admin | `ADMIN_EMAIL`                  | `ADMIN_PASSWORD` |
 | Associate 1 | `associate@verdant.example`    | `Associate@12345`|
-| Associate 2 | `associate2@verdant.example`   | `Associate@12345`|
+| Associate 2 | `associate2@verdant.example`   | `Associate@12345` (only after Python seed script) |
+
+Once logged in as admin, go to **Content Studio** in the sidebar to edit every home-page section, project, gallery image and site setting — live.
 
 ---
 
-## Data flow — every screen fetches from MongoDB
+## Key API endpoints (all under `/api/`)
 
-| Screen                                    | Backend endpoint                       |
-|-------------------------------------------|----------------------------------------|
-| Public projects list                      | `GET /api/public/projects`             |
-| Public project detail + properties        | `GET /api/public/projects/{slug}`      |
-| Public properties list                    | `GET /api/public/properties`           |
-| Public gallery                            | `GET /api/public/gallery`              |
-| Public inquiry / site-visit form          | `POST /api/public/inquiries|site-visits` |
-| Admin dashboard counters                  | `GET /api/admin/dashboard`             |
-| Admin leads + assignment                  | `GET /api/admin/leads` · `PATCH /api/admin/leads/{id}/assign` |
-| Admin reservations approval               | `GET /api/admin/reservations` · `PATCH /api/admin/reservations/{id}` |
-| Associate dashboard counters              | `GET /api/associate/dashboard`         |
-| Associate leads + status updates          | `GET /api/associate/leads` · `PATCH /api/associate/leads/{id}/status` |
-| Associate site visits                     | `GET /api/associate/site-visits`       |
-| Associate properties                      | `GET /api/associate/properties`        |
-
-No data is hard-coded on the frontend — every table and metric card is populated from MongoDB via the endpoints above.
+| Purpose | Endpoint |
+|---|---|
+| Login / me / logout | `POST /auth/login` · `GET /auth/me` · `POST /auth/logout` |
+| Public website | `GET /public/projects` · `GET /public/projects/:slug` · `GET /public/properties` · `GET /public/gallery` · `GET /public/site-content` |
+| Inquiries / visits | `POST /public/inquiries` · `POST /public/site-visits` |
+| Admin dashboards | `GET /admin/dashboard` · `GET /admin/reports` |
+| Lead pipeline | `GET /admin/leads` · `PATCH /admin/leads/:id/assign` · `GET /associate/leads` · `PATCH /associate/leads/:id/status` |
+| Reservation & booking | `GET /admin/reservations` · `PATCH /admin/reservations/:id` · `GET /admin/bookings` · `PATCH /admin/bookings/:id` |
+| Content Studio | `GET/PUT /admin/settings` · `GET/POST/PATCH/DELETE /admin/content/:collection` (hero-slides, testimonials, trust-pillars, property-types) |
+| Projects CRUD | `GET/POST /admin/projects` · `PATCH/DELETE /admin/projects/:id` |
+| Uploads / media | `POST /admin/uploads` · `GET /media/:filename` · `DELETE /admin/gallery/:id` |
 
 ---
 
-## Testing
+## Note about `backend/server.py`
 
-```bash
-cd backend
-pytest
-```
+This project ships one Python file at `backend/server.py`. It is a **thin proxy shim used only by the Emergent preview environment**, which expects a Python `server:app` entry point — the shim spawns `node server.js` on port 8002 and forwards HTTP.
 
-The pytest suite in `backend/tests/` exercises the full public inquiry → lead assignment → site visit → reservation → booking workflow.
+**For local development you can delete `backend/server.py` and the FastAPI/uvicorn/httpx lines from `requirements.txt`.** The Node backend runs cleanly on its own with `node server.js`.
+
+---
+
+## Troubleshooting
+
+- **`ERESOLVE` on `npm install`** — this repo uses **yarn**, not npm. Run `yarn install` instead. If you must use npm, add `--legacy-peer-deps`.
+- **MongoDB connection refused** — make sure MongoDB is running (`brew services start mongodb-community` / `net start MongoDB` / Docker).
+- **Cookies not sticking between frontend and backend** — set `FRONTEND_URL` in `backend/.env` to exactly match where the React app is served, including protocol.
