@@ -106,6 +106,7 @@ const uploadSchema = new mongoose.Schema({
 
 const settingsSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, default: "site-settings" },
+  application_name: String,
   phone: String, email: String, address: String,
   tagline_en: String, tagline_hi: String,
   intro_title: String, intro_copy: String,

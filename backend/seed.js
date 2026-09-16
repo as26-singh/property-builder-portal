@@ -6,6 +6,7 @@ const { hashPassword } = require("./auth");
 
 const DEFAULT_SETTINGS = {
   id: "site-settings",
+  application_name: "Nirnay Group",
   phone: "+91 98765 43210",
   email: "hello@nirnaygroup.com",
   address: "Shubharambh Building 13D, Shyam Nagar, Kanpur 208013",

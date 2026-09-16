@@ -176,6 +176,7 @@ async def upsert_content_many(db, *, collection: str, docs: list, key: str) -> N
 
 DEFAULT_SETTINGS = {
     "id": "site-settings",
+    "application_name": "Nirnay Group",
     "phone": "+91 98765 43210",
     "email": "hello@nirnaygroup.com",
     "address": "Kanpur, Uttar Pradesh, India",
