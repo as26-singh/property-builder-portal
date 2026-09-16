@@ -3,10 +3,13 @@ import { Sparkles } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import PortalLayout from "../components/PortalLayout";
+import { useSiteContent } from "@/content";
 
 export default function Dashboard({ admin = false }) {
   const { user } = useAuth();
   const [data, setData] = useState({});
+  const { content } = useSiteContent();
+    document.title = content.settings.application_name
   useEffect(() => {
     if (!user || (admin ? user.role !== "super_admin" : user.role !== "associate")) return;
     api.get(admin ? "/admin/dashboard" : "/associate/dashboard").then((r) => setData(r.data)).catch(() => {});

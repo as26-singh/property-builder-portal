@@ -6,9 +6,10 @@ import UploadField, { toAbsoluteUrl } from "../../components/UploadField";
 import { useSiteContent } from "../../content";
 
 const SETTINGS_FIELDS = [
-  { key: "phone", label: "Phone number", placeholder: "+91 98765 43210" },
-  { key: "email", label: "Email", placeholder: "hello@nirnaygroup.com" },
-  { key: "address", label: "Office address" },
+  {key: "application_name", label: "Application Name", placeholder: "Enter Application Name" },
+  { key: "phone", label: "Phone number", placeholder: "Enter Mobile no." },
+  { key: "email", label: "Email", placeholder: "Enter Email Id" },
+  { key: "address", label: "Enter Office address" },
   { key: "tagline_en", label: "Tagline (English)" },
   { key: "tagline_hi", label: "Tagline (Hindi / Local)" },
   { key: "intro_title", label: "Home intro title" },

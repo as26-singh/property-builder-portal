@@ -39,6 +39,8 @@ function PublicHeader() {
 export default function PublicLayout({ children }) {
   const { content } = useSiteContent();
   const settings = content?.settings || {};
+  document.title = settings.application_name
+  console.log(settings)
   return (
     <>
       <PublicHeader />
@@ -54,9 +56,8 @@ export default function PublicLayout({ children }) {
           <Link to="/projects">Projects</Link>
           <Link to="/contact">Contact</Link>
           <Link to="/associate/login">Associate login</Link>
-          <Link to="/admin/login">Admin login</Link>
         </div>
-        <div className="footer-copy">© {new Date().getFullYear()} Nirnay Group</div>
+        <div className="footer-copy">© {new Date().getFullYear()} {settings.application_name}</div>
       </footer>
     </>
   );

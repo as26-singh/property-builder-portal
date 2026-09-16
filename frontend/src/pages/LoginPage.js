@@ -11,6 +11,10 @@ export default function LoginPage({ role }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const { user, setUser } = useAuth();
+  const [settings, setSettings] = useState(null);
+  api.get("/public/site-content")
+  .then((r) => setSettings(r.data.settings)).catch(() =>{} )
+  document.title = settings?.application_name;
   const navigate = useNavigate();
   if (user) return <Navigate to={user.role === "super_admin" ? "/admin/dashboard" : "/associate/dashboard"} />;
   const submit = async (e) => {
