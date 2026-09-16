@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { Plus, Save, Trash2, X } from "lucide-react";
+import {
+  Building2, Image as ImageIcon, Images, LayoutGrid, MapPin, Plus, Quote, Save, ShieldCheck,
+  SlidersHorizontal, Trash2, Users, X,
+} from "lucide-react";
 import { api } from "../../api";
 import PortalLayout from "../../components/PortalLayout";
 import UploadField, { toAbsoluteUrl } from "../../components/UploadField";
@@ -29,7 +32,7 @@ const SETTINGS_FIELDS = [
 
 const COLLECTIONS = {
   "hero-slides": {
-    label: "Hero slides",
+    label: "Hero slides", singular: "hero slide",
     fields: [
       { key: "image", label: "Image URL", required: true, upload: "image/*" },
       { key: "kicker", label: "Small kicker" },
@@ -42,7 +45,7 @@ const COLLECTIONS = {
     summary: (s) => s.title,
   },
   testimonials: {
-    label: "Testimonials",
+    label: "Testimonials", singular: "testimonial",
     fields: [
       { key: "quote", label: "Quote", type: "textarea", required: true },
       { key: "name", label: "Author name", required: true },
@@ -52,7 +55,7 @@ const COLLECTIONS = {
     summary: (s) => `${s.name} — ${s.role || ""}`,
   },
   "trust-pillars": {
-    label: "Trust pillars",
+    label: "Trust pillars", singular: "trust pillar",
     fields: [
       { key: "icon", label: "Lucide icon name", required: true, placeholder: "ShieldCheck" },
       { key: "title", label: "Pillar title", required: true },
@@ -62,7 +65,7 @@ const COLLECTIONS = {
     summary: (s) => s.title,
   },
   "property-types": {
-    label: "Property types",
+    label: "Property types", singular: "property type",
     fields: [
       { key: "icon", label: "Lucide icon name", required: true, placeholder: "Home" },
       { key: "name", label: "Type name", required: true },
@@ -74,15 +77,15 @@ const COLLECTIONS = {
 };
 
 const TABS = [
-  { key: "general", label: "General" },
-  { key: "hero-slides", label: "Hero slides" },
-  { key: "projects", label: "Projects" },
-  { key: "properties", label: "Properties" },
-  { key: "associates", label: "Associates" },
-  { key: "gallery", label: "Gallery" },
-  { key: "testimonials", label: "Testimonials" },
-  { key: "trust-pillars", label: "Trust pillars" },
-  { key: "property-types", label: "Property types" },
+  { key: "general", label: "General", icon: SlidersHorizontal, description: "Contact details, taglines, footer and homepage copy." },
+  { key: "hero-slides", label: "Hero slides", icon: Images, description: "The full-screen carousel at the top of the homepage." },
+  { key: "projects", label: "Projects", icon: Building2, description: "Developments listed on the website, with brochures and master plans." },
+  { key: "properties", label: "Properties", icon: MapPin, description: "Plots and units inside each project, with pricing and availability." },
+  { key: "associates", label: "Associates", icon: Users, description: "Sales associates who can log in and work leads." },
+  { key: "gallery", label: "Gallery", icon: ImageIcon, description: "Photos shown on the public gallery page." },
+  { key: "testimonials", label: "Testimonials", icon: Quote, description: "Customer quotes on the homepage." },
+  { key: "trust-pillars", label: "Trust pillars", icon: ShieldCheck, description: "The three reasons-to-believe under the hero." },
+  { key: "property-types", label: "Property types", icon: LayoutGrid, description: "Categories of property you offer." },
 ];
 
 function Field({ field, value, onChange }) {
@@ -154,43 +157,53 @@ function CollectionPanel({ collectionKey, onSaved }) {
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState({});
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  const load = () => api.get(`/admin/content/${collectionKey}`).then((r) => setItems(r.data));
+  const load = () => api.get(`/admin/content/${collectionKey}`).then((r) => setItems(r.data)).catch(() => setError("Could not load items"));
 
   useEffect(() => {
     load();
     setEditing(null);
     setDraft({});
+    setError("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionKey]);
 
   const startNew = () => {
     setDraft(Object.fromEntries(spec.fields.map((f) => [f.key, f.type === "number" ? items.length : ""])));
     setEditing("new");
+    setError("");
   };
   const startEdit = (item) => {
     setDraft({ ...item });
     setEditing(item.id);
+    setError("");
   };
-  const cancel = () => { setEditing(null); setDraft({}); };
+  const cancel = () => { setEditing(null); setDraft({}); setError(""); };
   const save = async (e) => {
     e.preventDefault();
     setBusy(true);
+    setError("");
     try {
       if (editing === "new") await api.post(`/admin/content/${collectionKey}`, draft);
       else await api.patch(`/admin/content/${collectionKey}/${editing}`, draft);
       await load();
       onSaved?.();
       cancel();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Save failed");
     } finally { setBusy(false); }
   };
   const remove = async (id) => {
     if (!window.confirm("Delete this item?")) return;
     setBusy(true);
+    setError("");
     try {
       await api.delete(`/admin/content/${collectionKey}/${id}`);
       await load();
       onSaved?.();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Delete failed");
     } finally { setBusy(false); }
   };
 
@@ -219,10 +232,11 @@ function CollectionPanel({ collectionKey, onSaved }) {
         ))}
         {!items.length && <div className="empty-state">No items yet. Click New to add one.</div>}
       </div>
+      {error && !editing && <div className="form-error" data-testid="content-error">{error}</div>}
       {editing && (
         <form className="content-edit" onSubmit={save} data-testid="content-edit-form">
           <div className="content-edit-head">
-            <h3>{editing === "new" ? `New ${spec.label.slice(0, -1)}` : `Edit ${spec.label.slice(0, -1)}`}</h3>
+            <h3>{editing === "new" ? `New ${spec.singular}` : `Edit ${spec.singular}`}</h3>
             <button type="button" className="icon-button" onClick={cancel} aria-label="Cancel">
               <X size={18} />
             </button>
@@ -232,6 +246,7 @@ function CollectionPanel({ collectionKey, onSaved }) {
               <Field key={f.key} field={f} value={draft[f.key]} onChange={(v) => setDraft({ ...draft, [f.key]: v })} />
             ))}
           </div>
+          {error && <div className="form-error" data-testid="content-error">{error}</div>}
           <div className="content-actions">
             <button type="submit" className="button" disabled={busy} data-testid="content-save-item">
               <Save size={16} /> {busy ? "Saving…" : "Save"}
@@ -397,8 +412,13 @@ function PropertiesPanel() {
   };
   const remove = async (id) => {
     if (!window.confirm("Delete this property?")) return;
-    await api.delete(`/admin/properties/${id}`);
-    load();
+    setError("");
+    try {
+      await api.delete(`/admin/properties/${id}`);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Delete failed");
+    }
   };
 
   return (
@@ -480,8 +500,13 @@ function AssociatesPanel() {
   };
   const remove = async (id) => {
     if (!window.confirm("Remove this associate? Their assigned leads will become unassigned.")) return;
-    await api.delete(`/admin/associates/${id}`);
-    load();
+    setError("");
+    try {
+      await api.delete(`/admin/associates/${id}`);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Could not remove associate");
+    }
   };
 
   return (
@@ -552,8 +577,13 @@ function GalleryPanel() {
   };
   const remove = async (id) => {
     if (!window.confirm("Delete this image?")) return;
-    await api.delete(`/admin/gallery/${id}`);
-    load();
+    setError("");
+    try {
+      await api.delete(`/admin/gallery/${id}`);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Delete failed");
+    }
   };
 
   return (
@@ -597,30 +627,44 @@ export default function ContentStudio() {
   const [tab, setTab] = useState("general");
   const { refresh } = useSiteContent();
   const onSaved = () => refresh();
+  const active = TABS.find((t) => t.key === tab) || TABS[0];
   return (
-    <PortalLayout title="Admin">
-      Content Studio
+    <PortalLayout title="Admin" heading="Content Studio">
       <div className="dashboard-content">
-        <div className="section-kicker">Configure the website live</div>
-        <h2>Every section, editable.</h2>
-        <div className="content-tabs" role="tablist" data-testid="content-tabs">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              className={`content-tab ${tab === t.key ? "active" : ""}`}
-              onClick={() => setTab(t.key)}
-              data-testid={`content-tab-${t.key}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="page-toolbar">
+          <div className="section-kicker">Configure the website live</div>
+          <h2>Every section, editable.</h2>
         </div>
-        {tab === "general" && <SettingsPanel onSaved={onSaved} />}
-        {tab === "projects" && <ProjectsPanel onSaved={onSaved} />}
-        {tab === "properties" && <PropertiesPanel />}
-        {tab === "associates" && <AssociatesPanel />}
-        {tab === "gallery" && <GalleryPanel />}
-        {COLLECTIONS[tab] && <CollectionPanel collectionKey={tab} onSaved={onSaved} />}
+        <div className="content-tabs" role="tablist" aria-label="Content sections" data-testid="content-tabs">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                className={`content-tab ${tab === t.key ? "active" : ""}`}
+                onClick={() => setTab(t.key)}
+                data-testid={`content-tab-${t.key}`}
+              >
+                <Icon size={15} /> {t.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="content-tabpanel" role="tabpanel">
+          <div className="content-tabpanel-head">
+            <h3>{active.label}</h3>
+            <p>{active.description}</p>
+          </div>
+          {tab === "general" && <SettingsPanel onSaved={onSaved} />}
+          {tab === "projects" && <ProjectsPanel onSaved={onSaved} />}
+          {tab === "properties" && <PropertiesPanel />}
+          {tab === "associates" && <AssociatesPanel />}
+          {tab === "gallery" && <GalleryPanel />}
+          {COLLECTIONS[tab] && <CollectionPanel collectionKey={tab} onSaved={onSaved} />}
+        </div>
       </div>
     </PortalLayout>
   );

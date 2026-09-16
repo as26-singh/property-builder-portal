@@ -49,8 +49,7 @@ export default function PropertiesPortalPage() {
   } = useFilteredList(items, { searchKeys: ["number", "size", "facing"], pageSize: 10 });
 
   return (
-    <PortalLayout title="Associate">
-      Property availability
+    <PortalLayout title="Associate" heading="Property availability">
       <div className="dashboard-content">
         <div className="section-kicker">{filtered.length} records</div>
         <h2>Find the right fit</h2>

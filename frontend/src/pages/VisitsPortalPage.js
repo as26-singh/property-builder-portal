@@ -8,8 +8,7 @@ export default function VisitsPortalPage() {
     api.get("/associate/site-visits").then((r) => setItems(r.data));
   }, []);
   return (
-    <PortalLayout title="Associate">
-      My site visits
+    <PortalLayout title="Associate" heading="My site visits">
       <div className="dashboard-content">
         <div className="section-kicker">{items.length} records</div>
         <h2>Upcoming conversations</h2>

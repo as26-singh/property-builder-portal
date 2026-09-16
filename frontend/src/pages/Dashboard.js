@@ -28,9 +28,8 @@ export default function Dashboard({ admin = false }) {
         ["bookings", "Bookings"],
       ];
   return (
-    <PortalLayout title={admin ? "Admin" : "Associate"}>
+    <PortalLayout title={admin ? "Admin" : "Associate"} heading={admin ? "Good morning" : `Welcome, ${user?.name?.split(" ")[0]}`}>
       <>
-        {admin ? "Good morning" : `Welcome, ${user?.name?.split(" ")[0]}`}
         <div className="dashboard-content">
           <div className="metric-grid">
             {cards.map(([key, label]) => (

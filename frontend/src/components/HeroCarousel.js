@@ -36,7 +36,14 @@ export default function HeroCarousel({ slides = [] }) {
             <Sparkles size={14} /> {slide.kicker}
           </div>
         )}
-        <h1 dangerouslySetInnerHTML={{ __html: slide.title.replace(/\n/g, "<br/>") }} />
+        <h1>
+          {String(slide.title || "").split("\n").map((line, i, arr) => (
+            <span key={i}>
+              {line}
+              {i < arr.length - 1 && <br />}
+            </span>
+          ))}
+        </h1>
         {slide.subtitle && <p>{slide.subtitle}</p>}
         <div className="hero-actions">
           {slide.cta_label && slide.cta_link && (

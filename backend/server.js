@@ -23,9 +23,16 @@ const api = express.Router();
 app.use(express.json({ limit: "12mb" }));
 app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 app.use(cookieParser());
+// FRONTEND_URL may be a comma-separated list (local dev + deployed preview + production).
+const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:3000")
+  .split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`Origin ${origin} is not allowed by CORS`));
+  },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 }));
 
 // ---------- Multer (local disk) ----------
@@ -65,6 +72,19 @@ function toPublic(doc) {
 
 function listPublic(docs) {
   return docs.map(toPublic);
+}
+
+// Clients echo back full documents when saving; strip identity/timestamp fields
+// so `$set` never collides with `$setOnInsert` or Mongoose-managed timestamps.
+const READ_ONLY_FIELDS = ["_id", "__v", "id", "created_at", "updated_at", "createdAt", "updatedAt", "properties", "password_hash"];
+function sanitizeBody(body, numericFields = []) {
+  const out = { ...(body || {}) };
+  for (const f of READ_ONLY_FIELDS) delete out[f];
+  for (const f of numericFields) {
+    if (out[f] === "" || out[f] === null || out[f] === undefined) delete out[f];
+    else out[f] = Number(out[f]) || 0;
+  }
+  return out;
 }
 
 // ---------- Root ----------
@@ -227,9 +247,11 @@ api.post("/admin/properties", requireAdmin, asyncH(async (req, res) => {
 }));
 
 api.patch("/admin/properties/:id", requireAdmin, asyncH(async (req, res) => {
-  const body = { ...(req.body || {}) };
-  delete body._id;
-  if (body.price !== undefined) body.price = Number(body.price) || 0;
+  const body = sanitizeBody(req.body, ["price"]);
+  if (body.number !== undefined) body.number = String(body.number);
+  if (body.project_id && !(await Project.findOne({ id: body.project_id }))) {
+    return res.status(404).json({ detail: "Project not found" });
+  }
   const r = await Property.updateOne({ id: req.params.id }, { $set: body });
   if (r.matchedCount === 0) return res.status(404).json({ detail: "Property not found" });
   const doc = await Property.findOne({ id: req.params.id });
@@ -294,13 +316,18 @@ api.patch("/admin/bookings/:id", requireAdmin, asyncH(async (req, res) => {
   res.json({ message: `Booking ${status}` });
 }));
 
+const LEAD_STATUSES = ["new", "contacted", "interested", "visit_scheduled", "visited", "negotiation", "reserved", "booked", "sold"];
+const PROPERTY_STATUSES = ["available", "reserved", "negotiation", "booked", "sold", "blocked"];
+
 api.get("/admin/reports", requireAdmin, asyncH(async (_req, res) => {
-  const leadStatuses = ["new", "contacted", "interested", "visit_scheduled", "visited", "negotiation", "reserved", "booked", "sold"];
-  const propStatuses = ["available", "reserved", "negotiation", "booked", "sold", "blocked"];
-  const lead_status = {};
-  for (const s of leadStatuses) lead_status[s] = await Lead.countDocuments({ status: s });
-  const property_status = {};
-  for (const s of propStatuses) property_status[s] = await Property.countDocuments({ status: s });
+  const [leadCounts, propCounts] = await Promise.all([
+    Lead.aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }]),
+    Property.aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }]),
+  ]);
+  const lead_status = Object.fromEntries(LEAD_STATUSES.map((s) => [s, 0]));
+  const property_status = Object.fromEntries(PROPERTY_STATUSES.map((s) => [s, 0]));
+  for (const c of leadCounts) if (c._id in lead_status) lead_status[c._id] = c.n;
+  for (const c of propCounts) if (c._id in property_status) property_status[c._id] = c.n;
   res.json({ lead_status, property_status });
 }));
 
@@ -327,8 +354,7 @@ api.get("/admin/settings", requireAdmin, asyncH(async (_req, res) => {
 }));
 
 api.put("/admin/settings", requireAdmin, asyncH(async (req, res) => {
-  const body = req.body || {};
-  delete body._id;
+  const body = sanitizeBody(req.body);
   await Settings.updateOne({ id: "site-settings" }, { $set: body, $setOnInsert: { id: "site-settings" } }, { upsert: true });
   const s = await Settings.findOne({ id: "site-settings" });
   res.json(toPublic(s));
@@ -351,7 +377,7 @@ api.get("/admin/content/:collection", requireAdmin, asyncH(async (req, res) => {
 api.post("/admin/content/:collection", requireAdmin, asyncH(async (req, res) => {
   const Model = CONTENT_MODELS[req.params.collection];
   if (!Model) return res.status(404).json({ detail: "Unknown content collection" });
-  const payload = { ...(req.body || {}), id: randomUUID() };
+  const payload = { ...sanitizeBody(req.body, ["order"]), id: randomUUID() };
   const doc = await Model.create(payload);
   res.json(toPublic(doc));
 }));
@@ -359,8 +385,7 @@ api.post("/admin/content/:collection", requireAdmin, asyncH(async (req, res) => 
 api.patch("/admin/content/:collection/:id", requireAdmin, asyncH(async (req, res) => {
   const Model = CONTENT_MODELS[req.params.collection];
   if (!Model) return res.status(404).json({ detail: "Unknown content collection" });
-  const body = { ...(req.body || {}) };
-  delete body._id;
+  const body = sanitizeBody(req.body, ["order"]);
   const r = await Model.updateOne({ id: req.params.id }, { $set: body });
   if (r.matchedCount === 0) return res.status(404).json({ detail: "Item not found" });
   const doc = await Model.findOne({ id: req.params.id });
@@ -382,7 +407,7 @@ api.get("/admin/projects", requireAdmin, asyncH(async (_req, res) => {
 }));
 
 api.post("/admin/projects", requireAdmin, asyncH(async (req, res) => {
-  const body = req.body || {};
+  const body = sanitizeBody(req.body, ["price_from"]);
   const slug = String(body.slug || "").trim().toLowerCase();
   if (!slug || !body.name) return res.status(400).json({ detail: "Slug and name are required" });
   if (await Project.findOne({ slug })) return res.status(409).json({ detail: "A project with this slug already exists" });
@@ -391,8 +416,7 @@ api.post("/admin/projects", requireAdmin, asyncH(async (req, res) => {
 }));
 
 api.patch("/admin/projects/:id", requireAdmin, asyncH(async (req, res) => {
-  const body = { ...(req.body || {}) };
-  delete body._id;
+  const body = sanitizeBody(req.body, ["price_from"]);
   if (body.slug) body.slug = String(body.slug).trim().toLowerCase();
   if (body.slug) {
     const conflict = await Project.findOne({ slug: body.slug, id: { $ne: req.params.id } });
@@ -433,6 +457,7 @@ api.patch("/associate/leads/:id/status", requireAssociate, asyncH(async (req, re
   const lead = await Lead.findOne({ id: req.params.id, assigned_associate_id: req.user.id });
   if (!lead) return res.status(404).json({ detail: "Assigned lead not found" });
   const { status, note = "" } = req.body || {};
+  if (!LEAD_STATUSES.includes(status)) return res.status(400).json({ detail: "Invalid lead status" });
   await Lead.updateOne({ id: lead.id }, { $set: { status } });
   await LeadActivity.create({ id: randomUUID(), lead_id: lead.id, associate_id: req.user.id, type: "status_change", note, status });
   res.json({ message: "Lead updated" });
@@ -503,8 +528,21 @@ app.use("/api", api);
 // Error handler
 app.use((err, _req, res, _next) => {
   console.error("[error]", err.message);
-  const status = err.status || (err.message?.includes("supported") ? 400 : 500);
-  res.status(status).json({ detail: err.message || "Server error" });
+  let status = err.status || 500;
+  let detail = err.message || "Server error";
+  if (err.name === "ValidationError" || err.name === "CastError") {
+    status = 400;
+    detail = Object.values(err.errors || {}).map((e) => e.message).join(", ") || err.message;
+  } else if (err.code === 11000) {
+    status = 409;
+    detail = `Duplicate value for ${Object.keys(err.keyValue || {}).join(", ") || "a unique field"}`;
+  } else if (err.code === "LIMIT_FILE_SIZE") {
+    status = 400;
+    detail = "File is larger than 10 MB";
+  } else if (err.message?.includes("supported") || err.message?.includes("CORS")) {
+    status = err.message.includes("CORS") ? 403 : 400;
+  }
+  res.status(status).json({ detail });
 });
 
 // ---------- Start ----------

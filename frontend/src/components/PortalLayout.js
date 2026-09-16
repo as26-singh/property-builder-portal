@@ -3,7 +3,7 @@ import { CalendarDays, ClipboardList, Home, LogOut, MapPin, Settings, Users } fr
 import Brand from "./Brand";
 import { useAuth } from "../auth";
 
-export default function PortalLayout({ children, title }) {
+export default function PortalLayout({ children, title, heading }) {
   const { user, logout, checking } = useAuth();
   const navigate = useNavigate();
   const admin = title === "Admin";
@@ -60,12 +60,13 @@ export default function PortalLayout({ children, title }) {
         <div className="portal-top">
           <div>
             <span className="muted-label">{admin ? "Admin workspace" : "Your workspace"}</span>
-            <h1>{children}</h1>
+            <h1>{heading}</h1>
           </div>
           <div className="portal-date">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
           </div>
         </div>
+        {children}
       </main>
     </div>
   );

@@ -6,16 +6,22 @@ export default function ReservationsPage() {
   const [items, setItems] = useState([]);
   const load = () => api.get("/admin/reservations").then((r) => setItems(r.data));
   useEffect(() => { load(); }, []);
+  const [error, setError] = useState("");
   const decide = async (id, decision) => {
-    await api.patch(`/admin/reservations/${id}`, { decision });
-    load();
+    setError("");
+    try {
+      await api.patch(`/admin/reservations/${id}`, { decision });
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Could not update the reservation");
+    }
   };
   return (
-    <PortalLayout title="Admin">
-      Reservation approvals
+    <PortalLayout title="Admin" heading="Reservation approvals">
       <div className="dashboard-content">
         <div className="section-kicker">{items.length} records</div>
         <h2>Pending decisions</h2>
+        {error && <div className="form-error">{error}</div>}
         <div className="property-table portal-table">
           {items.map((x) => (
             <div className="property-row" key={x.id} data-testid={`reservation-row-${x.id}`}>

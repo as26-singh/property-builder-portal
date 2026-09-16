@@ -14,6 +14,7 @@ export default function LeadsPage({ admin = false }) {
   const [visitLead, setVisitLead] = useState(null);
   const [visitDraft, setVisitDraft] = useState({});
   const [visitError, setVisitError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const load = () => api.get(admin ? "/admin/leads" : "/associate/leads").then((r) => setLeads(r.data));
 
@@ -23,14 +24,17 @@ export default function LeadsPage({ admin = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const update = async (id, status) => {
-    await api.patch(`/associate/leads/${id}/status`, { status });
-    load();
+  const runAction = async (fn) => {
+    setActionError("");
+    try {
+      await fn();
+      await load();
+    } catch (err) {
+      setActionError(err.response?.data?.detail || "The update could not be saved. Please try again.");
+    }
   };
-  const assign = async (e, id) => {
-    await api.patch(`/admin/leads/${id}/assign`, { associate_id: e.target.value });
-    load();
-  };
+  const update = (id, status) => runAction(() => api.patch(`/associate/leads/${id}/status`, { status }));
+  const assign = (e, id) => runAction(() => api.patch(`/admin/leads/${id}/assign`, { associate_id: e.target.value || null }));
 
   const openVisit = (lead) => {
     setVisitLead(lead);
@@ -60,9 +64,8 @@ export default function LeadsPage({ admin = false }) {
   } = useFilteredList(leads, { searchKeys: ["name", "phone", "email", "message"], pageSize: 10 });
 
   return (
-    <PortalLayout title={admin ? "Admin" : "Associate"}>
+    <PortalLayout title={admin ? "Admin" : "Associate"} heading={admin ? "Lead pipeline" : "My leads"}>
       <>
-        {admin ? "Lead pipeline" : "My leads"}
         <div className="dashboard-content">
           <div className="page-toolbar">
             <div>
@@ -70,6 +73,7 @@ export default function LeadsPage({ admin = false }) {
               <h2>{admin ? "All enquiries" : "People to follow up"}</h2>
             </div>
           </div>
+          {actionError && <div className="form-error" data-testid="lead-action-error">{actionError}</div>}
           <TableToolbar
             q={q}
             setQ={setQ}
