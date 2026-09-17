@@ -16,6 +16,7 @@ import PropertiesPortalPage from "./pages/PropertiesPortalPage";
 import VisitsPortalPage from "./pages/VisitsPortalPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import ContentStudio from "./pages/admin/ContentStudio";
+import LegalDocumentsPage from "./pages/LegalDocuments";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/properties" element={<PropertiesPage />} />
             <Route path="/gallery" element={<GalleryPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/legal" element= {<LegalDocumentsPage />} />
             <Route path="/contact" element={<FormPage />} />
             <Route path="/book-site-visit" element={<FormPage visit />} />
 

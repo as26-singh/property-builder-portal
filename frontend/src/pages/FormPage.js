@@ -33,6 +33,13 @@ export default function FormPage({ visit = false }) {
   }
   return (
     <PublicLayout>
+      <section className="page-hero hero-contact">
+  <div className="hero-inner">
+    <span className="eyebrow light">Direct Engagement</span>
+    <h1>Connect With <em>Our Team</em></h1>
+    <p>Schedule site tours, request detailed dossiers, or connect with our relationship executives.</p>
+  </div>
+</section>
       <section className="form-page">
         <div className="form-copy">
           <div className="section-kicker">{visit ? "A little closer" : "Start a conversation"}</div>

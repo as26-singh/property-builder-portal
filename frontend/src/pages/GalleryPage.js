@@ -19,6 +19,13 @@ export default function GalleryPage() {
   const list = items.length ? items : FALLBACKS;
   return (
     <PublicLayout>
+      <section className="page-hero hero-gallery">
+  <div className="hero-inner">
+    <span className="eyebrow light">Visual Journey</span>
+    <h1>Architecture & <em>Spaces</em></h1>
+    <p>A photographic overview of on-site progress, finished elevations, and scenic landscapes.</p>
+  </div>
+</section>
       <PageIntro
         eyebrow="A sense of place"
         title={<>Life, <em>beautifully framed.</em></>}
