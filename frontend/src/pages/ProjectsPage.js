@@ -12,6 +12,13 @@ export default function ProjectsPage() {
   }, []);
   return (
     <PublicLayout>
+      <section className="page-hero hero-projects">
+  <div className="hero-inner">
+    <span className="eyebrow light">Master Developments</span>
+    <h1>Signature <em>Projects</em></h1>
+    <p>Discover our prime residential layouts, master-planned townships, and integrated spaces.</p>
+  </div>
+</section>
       <PageIntro
         eyebrow="Our places"
         title={<>Projects with <em>perspective.</em></>}
