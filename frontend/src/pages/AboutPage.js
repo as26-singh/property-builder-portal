@@ -4,6 +4,13 @@ import PageIntro from "../components/PageIntro";
 export default function AboutPage() {
   return (
     <PublicLayout>
+      <section className="page-hero hero-about">
+  <div className="hero-inner">
+    <span className="eyebrow light">Our Foundation</span>
+    <h1>Our Heritage & <em>Vision</em></h1>
+    <p>Building trusted spaces with transparency, architectural precision, and enduring community value.</p>
+  </div>
+</section>
       <PageIntro
         eyebrow="Our story"
         title={<>Built around<br /><em>the good life.</em></>}

@@ -20,6 +20,13 @@ export default function PropertiesPage() {
 
   return (
     <PublicLayout>
+      <section className="page-hero hero-properties">
+  <div className="hero-inner">
+    <span className="eyebrow light">Available Inventories</span>
+    <h1>Featured <em>Properties</em></h1>
+    <p>Explore verified plots, premium villas, and luxury residential opportunities.</p>
+  </div>
+</section>
       <PageIntro
         eyebrow="Available now"
         title={<>A place for every <em>possibility.</em></>}
